@@ -7,6 +7,7 @@ from types import FunctionType
 from functools import partial
 from itertools import chain
 
+import numpy as np
 from slicerator import pipeline
 from pims.frame import Frame
 from pims.base_frames import FramesSequence, FramesSequenceND
@@ -695,6 +696,34 @@ class Viewer(QtWidgets.QMainWindow):
                 self.open_file(fn)
                 break
 
+    def keyPressEvent(self, event):
+        if type(event) == QtWidgets.QKeyEvent:
+            key = event.key()
+            # Number keys (code: 0 = key 48, 9 = key 57) move to deciles
+            if key == QtCore.Qt.Key_N and (self.index['t'] < self.reader.sizes['t'] - 1):
+                self.index['t'] += 1
+                self.update_index()
+                event.accept()
+            elif (key == QtCore.Qt.Key_P) and (self.index['t'] > 0):
+                self.index['t'] -= 1
+                self.update_index()
+                event.accept()
+            elif (key == QtCore.Qt.Key_R):
+                index = np.random.randint(0, self.reader.sizes['t'] - 1)
+                self.index['t'] = index
+                self.update_index()
+                event.accept()
+            elif key == QtCore.Qt.Key_Space:
+                if self.is_playing:
+                    self.stop()
+                else:
+                    self.play()
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.ignore()
+
 
 class Plugin(QtWidgets.QDialog):
     def __init__(self, height=0, width=400, dock='bottom'):
@@ -907,7 +936,7 @@ class ViewerAnnotate(Plugin):
     name = 'Annotate'
 
     def __init__(self, features):
-        super(ViewerAnnotate, self).__init__()
+        super(ViewerAnnotate, self).__init__(dock=False)
         self.artist = None
         self.features = features
 
