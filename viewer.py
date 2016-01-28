@@ -935,10 +935,11 @@ class ViewerPlotting(Plugin):
 class ViewerAnnotate(Plugin):
     name = 'Annotate'
 
-    def __init__(self, features):
+    def __init__(self, features, cropped=False):
         super(ViewerAnnotate, self).__init__(dock=False)
         self.artist = None
         self.features = features
+        self.cropped = cropped
 
     def attach(self, image_viewer):
         super(ViewerAnnotate, self).attach(image_viewer)
@@ -960,6 +961,11 @@ class ViewerAnnotate(Plugin):
                            markerfacecolor='none', markeredgecolor='r',
                            marker='o', linestyle='none')
         f_frame = self.features[self.features['frame'] == frame_no]
+        if self.cropped:
+            self.ax.set_xlim(int(f_frame['x'].min()) - 15,
+                             int(f_frame['x'].max()) + 15)
+            self.ax.set_ylim(int(f_frame['y'].max()) + 15,
+                             int(f_frame['y'].min()) - 15)
         if self.artist is not None:
             remove_artists(self.artist)
         if len(f_frame) == 0:
