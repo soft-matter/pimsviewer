@@ -8,8 +8,9 @@ import unittest
 import nose
 import numpy as np
 from numpy.testing import (assert_equal, assert_almost_equal, assert_allclose)
-from pimsviewer.viewer import Viewer, ViewerPipeline, Slider
-from pims import FramesSequence, FramesSequenceND
+from pimsviewer.viewer import Viewer, ViewerPipeline, Slider, ViewerAnnotate
+from pims import FramesSequence, FramesSequenceND, Frame
+import pandas as pd
 
 
 class RandomReader(FramesSequence):
@@ -31,10 +32,11 @@ class RandomReader(FramesSequence):
 
     def get_frame(self, i):
         if np.issubdtype(self._dtype, np.float):
-            return np.random.random(self._shape).astype(self._dtype)
+            frame = np.random.random(self._shape).astype(self._dtype)
         else:
-            return np.random.randint(0, np.iinfo(self._dtype).max,
+            frame = np.random.randint(0, np.iinfo(self._dtype).max,
                                      self._shape).astype(self._dtype)
+        return Frame(frame, frame_no=i)
 
 
 def add_noise(img, noise_level):
@@ -54,6 +56,11 @@ class TestViewer(unittest.TestCase):
                    Slider('noise_level', 0, 100, 0, orientation='vertical')
         viewer = Viewer(RandomReader()) + AddNoise
         viewer.show()
+
+    def test_viewer_annotate(self):
+        f = pd.DataFrame(np.random.random((100, 2)) * 128, columns=['x', 'y'])
+        f['frame'] = np.repeat(np.arange(10), 10)
+        (Viewer(RandomReader()) + ViewerAnnotate(f)).show()
 
 
 if __name__ == '__main__':

@@ -1,5 +1,5 @@
 import numpy as np
-from pims.viewer import ViewerPipeline, Slider, ViewerPlotting
+from pimsviewer import ViewerPipeline, Slider, ViewerPlotting
 
 
 def convert_to_grey(img, r, g, b):
