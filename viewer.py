@@ -6,6 +6,7 @@ import os
 from types import FunctionType
 from functools import partial
 from itertools import chain
+from time import time
 
 import numpy as np
 from slicerator import pipeline
@@ -32,6 +33,40 @@ class QDockWidgetCloseable(QtWidgets.QDockWidget):
     def closeEvent(self, event):
         self.close_event_signal.emit()
         super(QDockWidgetCloseable, self).closeEvent(event)
+
+
+class VideoTimer(QtCore.QTimer):
+    next_frame = Signal(int)
+    def __init__(self, *args):
+        super(VideoTimer, self).__init__(*args)
+        self.timeout.connect(self.next)
+        self.index = None
+        self._len = None
+
+    @property
+    def fps(self):
+        return 1 / self._interval
+    @fps.setter
+    def fps(self, value):
+        self._interval = 1 / value
+        self.setInterval(self._interval * 1000)
+
+    def start(self, index, length):
+        self.start_index = index
+        self._len = length
+        self.start_time = time()
+        super(VideoTimer, self).start()
+
+    def stop(self):
+        super(VideoTimer, self).stop()
+        self.start_index = None
+        self._len = None
+        self.start_time = None
+
+    def next(self):
+        index = int((time() - self.start_time) // self._interval)
+        index = (index + self.start_index) % self._len
+        self.next_frame.emit(index)
 
 
 def _recursive_subclasses(cls):
@@ -316,7 +351,7 @@ class Viewer(QtWidgets.QMainWindow):
         self.is_multichannel = False
         self.is_playing = False
         self.mpp = None
-        self._timer = None
+        self._index = dict()
 
         # Start main loop
         init_qtapp()
@@ -365,6 +400,7 @@ class Viewer(QtWidgets.QMainWindow):
         self.setAcceptDrops(True)
         self._dropped.connect(self._open_dropped)
 
+        self._timer = VideoTimer(self)
         if reader is not None:
             self.update_reader(reader)
 
@@ -436,7 +472,7 @@ class Viewer(QtWidgets.QMainWindow):
             self.sliders[axis] = Slider(axis, low=0, high=reader.sizes[axis] - 1,
                                         value=index[axis], update_on='release',
                                         value_type='int',
-                                        callback=self.slider_callback)
+                                        callback=self.update_index)
 
         if len(self.sliders) > 0:
             slider_widget = QtWidgets.QWidget()
@@ -455,8 +491,8 @@ class Viewer(QtWidgets.QMainWindow):
                                          QtGui.QDockWidget.DockWidgetMovable)
             self.addDockWidget(Qt.BottomDockWidgetArea, self.slider_dock)
 
-        self.index = index
         self.update_display()
+        self.index = index
 
     def close_reader(self):
         if self.is_playing:
@@ -493,7 +529,7 @@ class Viewer(QtWidgets.QMainWindow):
                                            QtGui.QSizePolicy.Ignored)
         self.renderer.widget.updateGeometry()
         self.main_layout.addWidget(self.renderer.widget, 0, 0)
-        self.update_index()
+        #self.update_index()
 
     def update_reader_axes(self):
         """Make sure that the reader bundle_axes settings are correct"""
@@ -513,24 +549,10 @@ class Viewer(QtWidgets.QMainWindow):
             bundle_axes += 'z'
         self.reader.bundle_axes = bundle_axes + 'yx'
 
-    def update_index(self, index=None):
-        """Select image on display using index into reader."""
-        if index == self.index:
-            return
-        elif index is None:
-            index = self.index
-        else:
-            self.index = index
-
-        self.update_reader_axes()
-
-        for name in self.sliders:
-            self.sliders[name].val = index[name]
-        self.reader.default_coords.update(index)
-        image = self.reader[0]
-
-        self.original_image = image
-        self.update_image()
+    def update_index(self, name, value):
+        new_index = self.index.copy()
+        new_index[name] = value
+        self.index = new_index
 
     def update_image(self):
         """Update the image that is being viewed."""
@@ -547,6 +569,35 @@ class Viewer(QtWidgets.QMainWindow):
         self.update_image()
 
     @property
+    def index(self):
+        return self._index
+    @index.setter
+    def index(self, index):
+        for key in index:
+            if key not in self.reader.sizes:
+                return ValueError("Dimension '{}' not in reader".format(key))
+            # clip value if necessary
+            if index[key] < 0:
+                index[key] = 0
+            elif index[key] >= self.reader.sizes[key]:
+                index[key] = self.reader.sizes[key] - 1
+        try:
+            if all((self._index[key] == index[key] for key in index)):
+                return  # do nothing when no coordinate was changed
+        except KeyError:
+            pass  # but continue when a coordinate did not exist
+        self._index.update(index)
+        self.update_reader_axes()
+        for name in self.sliders:
+            self.sliders[name].val = index[name]
+        self.reader.default_coords.update(index)
+        image = self.reader[0]
+        if 't' in index:
+            image.frame_no = index['t']
+        self.original_image = image
+        self.update_image()
+
+    @property
     def image(self):
         """The image that is being displayed"""
         return self._img
@@ -557,21 +608,11 @@ class Viewer(QtWidgets.QMainWindow):
         self.renderer.image = to_rgb_uint8(image, autoscale=True)
         self.original_image_changed.emit()
 
-    def slider_callback(self, name, index):
-        """Callback function for axes sliders."""
-        if self.index[name] == index:
-            return
-        new_index = self.index.copy()
-        new_index[name] = index
-        self.update_index(new_index)
-
     def channel_tab_callback(self, index):
         """Callback function for channel tabs."""
         self.is_multichannel = index == 0
         if index > 0:  # monochannel: update channel field
-            self.index['c'] = index - 1  # because 0 is multichannel
-
-        self.update_index()
+            self.update_index('c', index - 1)  # because 0 is multichannel
 
     def play_callback(self, name, value):
         """Callback function for play checkbox."""
@@ -586,29 +627,18 @@ class Viewer(QtWidgets.QMainWindow):
         """Start the movie."""
         if fps is None:
             try:
-                fps = self.reader.frame_rate
+                self._timer.fps = self.reader.frame_rate
             except AttributeError:
-                fps = 25.
-        self._timer = TimerQT(interval=1000/fps)
-        self._timer.add_callback(self.next_index)
+                self._timer.fps = 25.
+
+        self._timer.start(self.index['t'], self.reader.sizes['t'])
+        self._timer.next_frame.connect(lambda x: self.update_index('t', x))
         self.is_playing = True
-        self._timer.start()
 
     def stop(self):
         """Stop the movie."""
-        if self._timer is None:
-            return
-        self.is_playing = False
         self._timer.stop()
-        self._timer = None
-
-    def next_index(self):
-        """Increase time index by one. At the end, restart."""
-        if self.index['t'] + 1 < self.reader.sizes['t']:
-            self.index['t'] += 1
-        else:
-            self.index['t'] = 0
-        self.update_index()
+        self.is_playing = False
 
     def add_plugin(self, plugin):
         """Add Plugin to the Viewer"""
@@ -700,18 +730,15 @@ class Viewer(QtWidgets.QMainWindow):
         if type(event) == QtWidgets.QKeyEvent:
             key = event.key()
             # Number keys (code: 0 = key 48, 9 = key 57) move to deciles
-            if key == QtCore.Qt.Key_N and (self.index['t'] < self.reader.sizes['t'] - 1):
-                self.index['t'] += 1
-                self.update_index()
+            if key in [QtCore.Qt.Key_N, QtCore.Qt.Key_Right]:
+                self.update_index('t', self.index['t'] + 1)
                 event.accept()
-            elif (key == QtCore.Qt.Key_P) and (self.index['t'] > 0):
-                self.index['t'] -= 1
-                self.update_index()
+            elif key in [QtCore.Qt.Key_P, QtCore.Qt.Key_Left]:
+                self.update_index('t', self.index['t'] - 1)
                 event.accept()
             elif (key == QtCore.Qt.Key_R):
                 index = np.random.randint(0, self.reader.sizes['t'] - 1)
-                self.index['t'] = index
-                self.update_index()
+                self.update_index('t', index)
                 event.accept()
             elif key == QtCore.Qt.Key_Space:
                 if self.is_playing:
@@ -719,10 +746,29 @@ class Viewer(QtWidgets.QMainWindow):
                 else:
                     self.play()
                 event.accept()
+            elif self.is_playing:
+                if key == QtCore.Qt.Key_Plus:
+                    self._timer.fps *= 1.2
+                elif key == QtCore.Qt.Key_Minus:
+                    self._timer.fps *= 0.8
+                elif key == QtCore.Qt.Key_Equal:
+                    try:
+                        self._timer.fps = self.reader.frame_rate
+                    except AttributeError:
+                        self._timer.fps = 25.
             else:
                 event.ignore()
         else:
             event.ignore()
+
+    def wheelEvent(self, event):
+        if 'z' in self.index:
+            new_z = self.index['z'] + int(event.delta() // 120)
+            if new_z < 0:
+                new_z = 0
+            if new_z >= self.reader.sizes['z'] - 1:
+                new_z = self.reader.sizes['z'] - 1
+            self.update_index('z', new_z)
 
 
 class Plugin(QtWidgets.QDialog):
