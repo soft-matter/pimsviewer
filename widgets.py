@@ -21,9 +21,11 @@ class VideoTimer(QtCore.QTimer):
     next_frame = Signal(int)
     def __init__(self, *args):
         super(VideoTimer, self).__init__(*args)
-        self.timeout.connect(self.next)
+        self.timeout.connect(self.update)
         self.index = None
         self._len = None
+        self.start_time = None
+        self.start_index = None
 
     @property
     def fps(self):
@@ -32,23 +34,27 @@ class VideoTimer(QtCore.QTimer):
     def fps(self, value):
         self._interval = 1 / value
         self.setInterval(self._interval * 1000)
+        if self.start_time is not None:
+            # restart index calculation because of different fps
+            self.start_time = time()
+            self.start_index = self.index
 
     def start(self, index, length):
         self.start_index = index
-        self._len = length
         self.start_time = time()
+        self._len = length
         super(VideoTimer, self).start()
 
     def stop(self):
         super(VideoTimer, self).stop()
         self.start_index = None
-        self._len = None
         self.start_time = None
+        self._len = None
 
-    def next(self):
-        index = int((time() - self.start_time) // self._interval)
-        index = (index + self.start_index) % self._len
-        self.next_frame.emit(index)
+    def update(self):
+        self.index = (int((time() - self.start_time) // self._interval) +
+                      self.start_index) % self._len
+        self.next_frame.emit(self.index)
 
 
 class Slider(BaseWidget):
