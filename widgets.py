@@ -2,9 +2,10 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import six
-from skimage.viewer.widgets import BaseWidget, CheckBox, Text, ComboBox
-from skimage.viewer.qt import Qt, QtWidgets, QtCore, Signal
+from pimsviewer.qt import Qt, QtWidgets, QtCore, Signal
 from time import time
+
+from skimage.viewer.widgets import BaseWidget, CheckBox, Text, ComboBox
 
 
 class DockWidget(QtWidgets.QDockWidget):

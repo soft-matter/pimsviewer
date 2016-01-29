@@ -1,10 +1,9 @@
 try:
-    from skimage.viewer.qt import has_qt
-    viewer_available = has_qt
+    from .qt import has_qt
 except ImportError:
-    viewer_available = False
+    has_qt = False
 
-if viewer_available:
+if has_qt:
     from .viewer import Viewer, Plugin
     from .plugins import ViewerPipeline, ViewerPlotting, ViewerAnnotate
     from .widgets import CheckBox, Text, ComboBox, Slider

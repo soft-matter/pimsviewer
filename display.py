@@ -5,7 +5,7 @@ from six import with_metaclass
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 import numpy as np
-from skimage.viewer.qt import QtGui, QtCore, QtWidgets, FigureCanvasQTAgg
+from pimsviewer.qt import QtGui, QtCore, QtWidgets, FigureCanvasQTAgg
 
 try:
     from qimage2ndarray import array2qimage
