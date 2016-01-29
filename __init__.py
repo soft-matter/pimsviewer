@@ -5,9 +5,9 @@ except ImportError:
     viewer_available = False
 
 if viewer_available:
-    from pimsviewer.viewer import (Viewer, ViewerPipeline, ViewerPlotting,
-                                   ViewerAnnotate, Slider)
-    from skimage.viewer.widgets import Text, ComboBox, CheckBox
+    from .viewer import Viewer, Plugin
+    from .plugins import ViewerPipeline, ViewerPlotting, ViewerAnnotate
+    from .widgets import CheckBox, Text, ComboBox, Slider
 else:
     def viewer_not_available(*args, **kwargs):
         raise ImportError(

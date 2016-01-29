@@ -3,321 +3,19 @@ from __future__ import (absolute_import, division, print_function,
 
 import six
 import os
-from types import FunctionType
 from functools import partial
 from itertools import chain
-from time import time
 
 import numpy as np
 from slicerator import pipeline
-from pims.frame import Frame
-from pims.base_frames import FramesSequence, FramesSequenceND
-from pims.display import to_rgb_uint8
+from pims import FramesSequence, FramesSequenceND
 
-from skimage.viewer.widgets import BaseWidget, CheckBox
-from skimage.viewer.qt import Qt, QtWidgets, QtGui, QtCore, Signal, _qt_version
-from skimage.viewer.utils import init_qtapp, start_qtapp
-
-from pims.viewer.display import Display, DisplayMPL
-
-if _qt_version == 5:
-    from matplotlib.backends.backend_qt5 import TimerQT
-elif _qt_version == 4:
-    from matplotlib.backends.backend_qt4 import TimerQT
-
-
-class QDockWidgetCloseable(QtWidgets.QDockWidget):
-    """A QDockWidget that emits a signal when closed."""
-    close_event_signal = Signal()
-
-    def closeEvent(self, event):
-        self.close_event_signal.emit()
-        super(QDockWidgetCloseable, self).closeEvent(event)
-
-
-class VideoTimer(QtCore.QTimer):
-    next_frame = Signal(int)
-    def __init__(self, *args):
-        super(VideoTimer, self).__init__(*args)
-        self.timeout.connect(self.next)
-        self.index = None
-        self._len = None
-
-    @property
-    def fps(self):
-        return 1 / self._interval
-    @fps.setter
-    def fps(self, value):
-        self._interval = 1 / value
-        self.setInterval(self._interval * 1000)
-
-    def start(self, index, length):
-        self.start_index = index
-        self._len = length
-        self.start_time = time()
-        super(VideoTimer, self).start()
-
-    def stop(self):
-        super(VideoTimer, self).stop()
-        self.start_index = None
-        self._len = None
-        self.start_time = None
-
-    def next(self):
-        index = int((time() - self.start_time) // self._interval)
-        index = (index + self.start_index) % self._len
-        self.next_frame.emit(index)
-
-
-def _recursive_subclasses(cls):
-    "Return all subclasses (and their subclasses, etc.)."
-    # Source: http://stackoverflow.com/a/3862957/1221924
-    return (cls.__subclasses__() +
-        [g for s in cls.__subclasses__() for g in _recursive_subclasses(s)])
-
-
-class FramesSequence_Wrapper(FramesSequenceND):
-    """This class wraps a FramesSequence so that it behaves as a
-    FramesSequenceND. All attributes are forwarded to the containing reader."""
-    colors_RGB = dict(colors=[(1., 0., 0.), (0., 1., 0.), (0., 0., 1.)])
-
-    def __init__(self, frames_sequence):
-        self._reader = frames_sequence
-        self._last_i = None
-        self._last_frame = None
-        shape = frames_sequence.frame_shape
-        ndim = len(shape)
-
-        try:
-            colors = self._reader.metadata['colors']
-            if len(colors) != shape[0]:
-                colors = None
-        except (KeyError, AttributeError):
-            colors = None
-
-        c = None
-        z = None
-        self.is_RGB = False
-        # 2D, grayscale
-        if ndim == 2:
-            y, x = shape
-        # 2D, has colors attribute
-        elif ndim == 3 and colors is not None:
-            c, y, x = shape
-        # 2D, RGB
-        elif ndim == 3 and shape[2] in [3, 4]:
-            y, x, c = shape
-            self.is_RGB = True
-        # 2D, is multichannel
-        elif ndim == 3 and shape[0] < 5:  # guessing; could be small z-stack
-            c, y, x = shape
-        # 3D, grayscale
-        elif ndim == 3:
-            z, y, x = shape
-        # 3D, has colors attribute
-        elif ndim == 4 and colors is not None:
-            c, z, y, x = shape
-        # 3D, RGB
-        elif ndim == 4 and shape[3] in [3, 4]:
-            z, y, x, c = shape
-            self.is_RGB = True
-        # 3D, is multichannel
-        elif ndim == 4 and shape[0] < 5:
-            c, z, y, x = shape
-        else:
-            raise ValueError("Cannot interpret dimensions for a reader of "
-                             "shape {0}".format(shape))
-
-        self._init_axis('y', y)
-        self._init_axis('x', x)
-        self._init_axis('t', len(self._reader))
-        if z is not None:
-            self._init_axis('z', z)
-        if c is not None:
-            self._init_axis('c', c)
-
-    def get_frame_2D(self, **ind):
-        # do some cacheing
-        if self._last_i != ind['t']:
-            self._last_i = ind['t']
-            self._last_frame = self._reader[ind['t']]
-        frame = self._last_frame
-
-        # hack to force colors to RGB:
-        if self.is_RGB:
-            try:
-                frame.metadata.update(self.colors_RGB)
-            except AttributeError:
-                try:
-                    frame_no = frame.frame_no
-                except AttributeError:
-                    frame_no = None
-                frame = Frame(frame, frame_no=frame_no,
-                              metadata=self.colors_RGB)
-
-        if 'z' in ind and 'c' in ind and self.is_RGB:
-            return frame[ind['z'], :, :, ind['c']]
-        elif 'z' in ind and 'c' in ind:
-            return frame[ind['c'], ind['z'], :, :]
-        elif 'z' in ind:
-            return frame[ind['z'], :, :]
-        elif 'c' in ind and self.is_RGB:
-            return frame[:, :, ind['c']]
-        elif 'c' in ind:
-            return frame[ind['c'], :, :]
-        else:
-            return frame
-
-    @property
-    def pixel_type(self):
-        return self._reader.pixel_type
-
-    def __getattr__(self, attr):
-        return self._reader.__getattr__(attr)
-
-
-
-class Slider(BaseWidget):
-    """Slider widget for adjusting numeric parameters.
-
-    Parameters
-    ----------
-    name : str
-        Name of slider parameter. If this parameter is passed as a keyword
-        argument, it must match the name of that keyword argument (spaces are
-        replaced with underscores). In addition, this name is displayed as the
-        name of the slider.
-    low, high : float
-        Range of slider values.
-    value : float
-        Default slider value. If None, use midpoint between `low` and `high`.
-    value_type : {'float' | 'int'}, optional
-        Numeric type of slider value.
-    ptype : {'kwarg' | 'arg' | 'plugin'}, optional
-        Parameter type.
-    callback : callable f(widget_name, value), optional
-        Callback function called in response to slider changes.
-        *Note:* This function is typically set (overridden) when the widget is
-        added to a plugin.
-    orientation : {'horizontal' | 'vertical'}, optional
-        Slider orientation.
-    update_on : {'release' | 'move'}, optional
-        Control when callback function is called: on slider move or release.
-    """
-    def __init__(self, name, low=0.0, high=1.0, value=None, value_type='float',
-                 ptype='kwarg', callback=None, max_edit_width=60,
-                 orientation='horizontal', update_on='release'):
-        super(Slider, self).__init__(name, ptype, callback)
-
-        if value is None:
-            value = (high - low) / 2.
-
-        # Set widget orientation
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        if orientation == 'vertical':
-            self.slider = QtWidgets.QSlider(Qt.Vertical)
-            alignment = QtCore.Qt.AlignHCenter
-            align_text = QtCore.Qt.AlignHCenter
-            align_value = QtCore.Qt.AlignHCenter
-            self.layout = QtWidgets.QVBoxLayout(self)
-        elif orientation == 'horizontal':
-            self.slider = QtWidgets.QSlider(Qt.Horizontal)
-            alignment = QtCore.Qt.AlignVCenter
-            align_text = QtCore.Qt.AlignLeft
-            align_value = QtCore.Qt.AlignRight
-            self.layout = QtWidgets.QHBoxLayout(self)
-        else:
-            msg = "Unexpected value %s for 'orientation'"
-            raise ValueError(msg % orientation)
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-        # Set slider behavior for float and int values.
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        if value_type == 'float':
-            # divide slider into 1000 discrete values
-            slider_max = 1000
-            self._scale = float(high - low) / slider_max
-            self.slider.setRange(0, slider_max)
-            self.value_fmt = '%2.2f'
-        elif value_type == 'int':
-            self.slider.setRange(low, high)
-            self.value_fmt = '%d'
-        else:
-            msg = "Expected `value_type` to be 'float' or 'int'; received: %s"
-            raise ValueError(msg % value_type)
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-        self.value_type = value_type
-        self._low = low
-        self._high = high
-        # Update slider position to default value
-        self.val = value
-
-        if update_on == 'move':
-            self.slider.valueChanged.connect(self._on_slider_changed)
-        elif update_on == 'release':
-            self.slider.sliderReleased.connect(self._on_slider_changed)
-        else:
-            raise ValueError("Unexpected value %s for 'update_on'" % update_on)
-        self.slider.setFocusPolicy(QtCore.Qt.StrongFocus)
-
-        self.name_label = QtWidgets.QLabel()
-        self.name_label.setText(self.name)
-        self.name_label.setAlignment(align_text)
-
-        self.editbox = QtWidgets.QLineEdit()
-        self.editbox.setMaximumWidth(max_edit_width)
-        self.editbox.setText(self.value_fmt % self.val)
-        self.editbox.setAlignment(align_value)
-        self.editbox.editingFinished.connect(self._on_editbox_changed)
-
-        self.layout.addWidget(self.name_label)
-        self.layout.addWidget(self.slider)
-        self.layout.addWidget(self.editbox)
-
-    def _on_slider_changed(self):
-        """Call callback function with slider's name and value as parameters"""
-        value = self.val
-        self.editbox.setText(str(value))
-        self.callback(self.name, value)
-
-    def _on_editbox_changed(self):
-        """Validate input and set slider value"""
-        try:
-            value = float(self.editbox.text())
-        except ValueError:
-            self._bad_editbox_input()
-            return
-        if not self._low <= value <= self._high:
-            self._bad_editbox_input()
-            return
-
-        self.val = value
-        self._good_editbox_input()
-        self.callback(self.name, value)
-
-    def _good_editbox_input(self):
-        self.editbox.setStyleSheet("background-color: rgb(255, 255, 255)")
-
-    def _bad_editbox_input(self):
-        self.editbox.setStyleSheet("background-color: rgb(255, 200, 200)")
-
-    @property
-    def val(self):
-        value = self.slider.value()
-        if self.value_type == 'float':
-            value = value * self._scale + self._low
-        return value
-
-    @val.setter
-    def val(self, value):
-        if self.value_type == 'float':
-            value = (value - self._low) / self._scale
-        self.slider.setValue(value)
-        try:
-            self.editbox.setText(str(value))
-        except AttributeError:
-            pass
+from pimsviewer.widgets import (CheckBox, DockWidget, VideoTimer, Slider)
+from pimsviewer.qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
+                           init_qtapp, start_qtapp)
+from pimsviewer.display import Display, DisplayMPL
+from pimsviewer.utils import (FramesSequence_Wrapper, recursive_subclasses,
+                              to_rgb_uint8)
 
 
 class Viewer(QtWidgets.QMainWindow):
@@ -361,8 +59,8 @@ class Viewer(QtWidgets.QMainWindow):
         self.setWindowTitle("Python IMage Sequence Viewer")
 
         open_with_menu = QtWidgets.QMenu('Open with', self)
-        for cls in set(chain(_recursive_subclasses(FramesSequence),
-                             _recursive_subclasses(FramesSequenceND))):
+        for cls in set(chain(recursive_subclasses(FramesSequence),
+                             recursive_subclasses(FramesSequenceND))):
             open_with_menu.addAction(cls.__name__,
                                      partial(self.open_file, reader_cls=cls))
 
@@ -375,7 +73,7 @@ class Viewer(QtWidgets.QMainWindow):
         self.menuBar().addMenu(self.file_menu)
 
         self.view_menu = QtWidgets.QMenu('&View', self)
-        for cls in _recursive_subclasses(Display):
+        for cls in recursive_subclasses(Display):
             if cls.available:
                 self.view_menu.addAction(cls.name,
                                          partial(self.update_display,
@@ -383,6 +81,7 @@ class Viewer(QtWidgets.QMainWindow):
         self.menuBar().addMenu(self.view_menu)
 
         self.pipeline_menu = QtWidgets.QMenu('&Pipelines', self)
+        from pimsviewer.plugins import ViewerPipeline
         for pipeline_obj in ViewerPipeline.instances:
             self.pipeline_menu.addAction(pipeline_obj.name,
                                          partial(self.add_plugin,
@@ -647,7 +346,7 @@ class Viewer(QtWidgets.QMainWindow):
         if plugin.dock:
             location = self.dock_areas[plugin.dock]
             dock_location = Qt.DockWidgetArea(location)
-            dock = QDockWidgetCloseable()
+            dock = DockWidget()
             dock.setWidget(plugin)
             dock.setWindowTitle(plugin.name)
             dock.close_event_signal.connect(plugin.close)
@@ -831,199 +530,3 @@ class Plugin(QtWidgets.QDialog):
         super(Plugin, self).show()
         self.activateWindow()
         self.raise_()
-
-
-class ViewerPipeline(Plugin):
-    """Base class for viewing the result of image processing inside the Viewer.
-
-    The ViewerPipeline class connects an image filter (or another function) to
-    the Viewer. The Viewer returns a reader object that has the function applied
-    with parameters set inside the Viewer.
-
-    Parameters
-    ----------
-    pipeline_func : function
-        Function that processes the image. It should not change the image shape.
-    name : string
-        Name of pipeline. This is displayed as the window title.
-    height, width : int
-        Size of plugin window in pixels. Note that Qt will automatically resize
-        a window to fit components. So if you're adding rows of components, you
-        can leave `height = 0` and just let Qt determine the final height.
-    dock : {bottom, top, left, right}
-        Default docking area
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pims.viewer import Viewer, ViewerPipeline, Slider
-    >>>
-    >>> def add_noise(img, noise_level):
-    >>>     return img + np.random.random(img.shape) * noise_level
-    >>>
-    >>> image_reader = np.zeros((1, 512, 512), dtype=np.uint8)
-    >>>
-    >>> AddNoise = ViewerPipeline(add_noise) + Slider('noise_level', 0, 100, 0)
-    >>> viewer = Viewer(image_reader)
-    >>> viewer += AddNoise
-    >>> original, noise_added = viewer.show()
-
-    Notes
-    -----
-    ViewerPipeline was partly based on `skimage.viewer.plugins.Plugin`
-    """
-    # Signals used when viewers are linked to the Plugin output.
-    pipeline_changed = Signal(int, FunctionType)
-    instances = []
-    def __init__(self, pipeline_func, name=None, height=0, width=400,
-                 dock='bottom'):
-        self.pipeline_func = pipeline_func
-
-        if name is None:
-            self.name = pipeline_func.__name__
-        else:
-            self.name = name
-
-        super(ViewerPipeline, self).__init__(height, width, dock)
-
-        # the class keeps a list of its instances. this means that the objects
-        # will not get garbage collected.
-        ViewerPipeline.instances.append(self)
-
-    def attach(self, image_viewer):
-        """Attach the pipeline to an ImageViewer.
-
-        Note that the ImageViewer will automatically call this method when the
-        plugin is added to the ImageViewer. For example:
-
-            viewer += Plugin(pipeline_func)
-
-        Also note that `attach` automatically calls the filter function so that
-        the image matches the filtered value specified by attached widgets.
-        """
-        super(ViewerPipeline, self).attach(image_viewer)
-
-        self.pipeline_changed.connect(self.image_viewer.update_pipeline)
-
-        self.image_viewer.plugins.append(self)
-        self.image_viewer.pipelines += [None]
-        self.pipeline_index = len(self.image_viewer.pipelines) - 1
-
-        self.process()
-
-    def process(self, *widget_arg):
-        """Send the changed pipeline function to the Viewer. """
-        # `widget_arg` is passed by the active widget but is unused since all
-        # filter arguments are pulled directly from attached the widgets.
-        kwargs = dict([(name, self._get_value(a))
-                       for name, a in self.keyword_arguments.items()])
-        func = lambda x: self.pipeline_func(x, *self.arguments, **kwargs)
-        self.pipeline_changed.emit(self.pipeline_index, func)
-
-    def close(self):
-        """Close the plugin and clean up."""
-        if self in self.image_viewer.plugins:
-            self.image_viewer.plugins.remove(self)
-
-        # delete the pipeline
-        if self.pipeline_index is not None:
-            del self.image_viewer.pipelines[self.pipeline_index]
-        # decrease pipeline_index for the other pipelines
-        for plugin in self.image_viewer.plugins:
-            try:
-                if plugin.pipeline_index > self.pipeline_index:
-                    plugin.pipeline_index -= 1
-            except AttributeError:
-                pass  # no pipeline_index
-
-        self.image_viewer.update_image()
-
-        super(ViewerPipeline, self).close()
-
-
-class ViewerPlotting(Plugin):
-    def __init__(self, plot_func, name=None, height=0, width=400,
-                 dock='bottom'):
-        if name is None:
-            self.name = plot_func.__name__
-        else:
-            self.name = name
-
-        super(ViewerPlotting, self).__init__(height, width, dock)
-
-        self.artist = None
-        self.plot_func = plot_func
-
-    def attach(self, image_viewer):
-        super(ViewerPlotting, self).attach(image_viewer)
-
-        if type(image_viewer.renderer) is not DisplayMPL:
-            image_viewer.update_display(DisplayMPL)
-
-        self.fig = image_viewer.renderer.fig
-        self.ax = image_viewer.renderer.ax
-        self.canvas = image_viewer.renderer.widget
-
-        self.image_viewer.original_image_changed.connect(self.process)
-
-        self.process()
-
-    def process(self, *widget_arg):
-        kwargs = dict([(name, self._get_value(a))
-                       for name, a in self.keyword_arguments.items()])
-        if self.artist is not None:
-            remove_artists(self.artist)
-        self.artist = self.plot_func(self.image_viewer.image, *self.arguments,
-                                     ax=self.ax, **kwargs)
-        self.canvas.draw_idle()
-
-
-class ViewerAnnotate(Plugin):
-    name = 'Annotate'
-
-    def __init__(self, features, cropped=False):
-        super(ViewerAnnotate, self).__init__(dock=False)
-        self.artist = None
-        self.features = features
-        self.cropped = cropped
-
-    def attach(self, image_viewer):
-        super(ViewerAnnotate, self).attach(image_viewer)
-
-        if type(image_viewer.renderer) is not DisplayMPL:
-            image_viewer.update_display(DisplayMPL)
-
-        self.fig = image_viewer.renderer.fig
-        self.ax = image_viewer.renderer.ax
-        self.canvas = image_viewer.renderer.widget
-
-        self.image_viewer.original_image_changed.connect(self.process)
-
-        self.process()
-
-    def process(self, *widget_arg):
-        frame_no = self.image_viewer.index['t']
-        _plot_style = dict(markersize=15, markeredgewidth=2,
-                           markerfacecolor='none', markeredgecolor='r',
-                           marker='o', linestyle='none')
-        f_frame = self.features[self.features['frame'] == frame_no]
-        if self.cropped:
-            self.ax.set_xlim(int(f_frame['x'].min()) - 15,
-                             int(f_frame['x'].max()) + 15)
-            self.ax.set_ylim(int(f_frame['y'].max()) + 15,
-                             int(f_frame['y'].min()) - 15)
-        if self.artist is not None:
-            remove_artists(self.artist)
-        if len(f_frame) == 0:
-            self.artist = None
-        else:
-            self.artist = self.ax.plot(f_frame['x'], f_frame['y'], **_plot_style)
-        self.canvas.draw_idle()
-
-
-def remove_artists(artists):
-    if isinstance(artists, list):
-        for artist in artists:
-            remove_artists(artist)
-    else:
-        artists.remove()
