@@ -2,8 +2,8 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import numpy as np
-from pims import FramesSequenceND, Frame, to_rgb, normalize
-
+from pims import Frame, to_rgb, normalize
+from pimsviewer.base_frames import FramesSequenceND, reads_axes
 
 def recursive_subclasses(cls):
     "Return all subclasses (and their subclasses, etc.)."
@@ -26,6 +26,10 @@ def to_rgb_uint8(image, autoscale=True):
     # 2D, grayscale
     if ndim == 2:
         grayscale = True
+    # 2D non-interleaved RGB
+    elif ndim == 3 and shape[0] in [3, 4]:
+        image = image.transpose([1, 2, 0])
+        autoscale = False
     # 2D, has colors attribute
     elif ndim == 3 and colors is not None:
         image = to_rgb(image, colors, False)
@@ -52,7 +56,7 @@ def to_rgb_uint8(image, autoscale=True):
 
     if autoscale:
         image = (normalize(image) * 255).astype(np.uint8)
-    elif image.dtype is not np.uint8:
+    elif not np.issubdtype(image.dtype, np.uint8):
         if np.issubdtype(image.dtype, np.integer):
             max_value = np.iinfo(image.dtype).max
             # sometimes 12-bit images are stored as unsigned 16-bit
@@ -128,24 +132,13 @@ class FramesSequence_Wrapper(FramesSequenceND):
         if c is not None:
             self._init_axis('c', c)
 
+    @reads_axes('yx')
     def get_frame_2D(self, **ind):
         # do some cacheing
         if self._last_i != ind['t']:
             self._last_i = ind['t']
             self._last_frame = self._reader[ind['t']]
         frame = self._last_frame
-
-        # hack to force colors to RGB:
-        if self.is_RGB:
-            try:
-                frame.metadata.update(self.colors_RGB)
-            except AttributeError:
-                try:
-                    frame_no = frame.frame_no
-                except AttributeError:
-                    frame_no = None
-                frame = Frame(frame, frame_no=frame_no,
-                              metadata=self.colors_RGB)
 
         if 'z' in ind and 'c' in ind and self.is_RGB:
             return frame[ind['z'], :, :, ind['c']]
@@ -157,6 +150,27 @@ class FramesSequence_Wrapper(FramesSequenceND):
             return frame[:, :, ind['c']]
         elif 'c' in ind:
             return frame[ind['c'], :, :]
+        else:
+            return frame
+
+    @reads_axes('yxc')
+    def get_frame_RGB(self, **ind):
+        # do some cacheing
+        if self._last_i != ind['t']:
+            self._last_i = ind['t']
+            self._last_frame = self._reader[ind['t']]
+        frame = self._last_frame
+
+        if 'z' in ind and 'c' in ind and self.is_RGB:
+            return frame[ind['z'], :, :, :]
+        elif 'z' in ind and 'c' in ind:
+            return frame[:, ind['z'], :, :].transpose([1, 2, 0])
+        elif 'z' in ind:
+            return frame[ind['z'], :, :]
+        elif 'c' in ind and self.is_RGB:
+            return frame[:, :, :]
+        elif 'c' in ind:
+            return frame[:, :, :].transpose([1, 2, 0])
         else:
             return frame
 

@@ -265,6 +265,8 @@ class Viewer(QtWidgets.QMainWindow):
                 return  # do nothing when no coordinate was changed
         except KeyError:
             pass  # but continue when a coordinate did not exist
+        if self.is_playing and name == 't':
+            self._timer.reset(value)
         self._index[name] = value
         self.update_image()
 
@@ -396,13 +398,15 @@ class Viewer(QtWidgets.QMainWindow):
         if type(event) == QtWidgets.QKeyEvent:
             key = event.key()
             # Number keys (code: 0 = key 48, 9 = key 57) move to deciles
+            if key in range(48, 58):
+                self.set_index(int(self.reader.sizes['t'] * (key - 48) / 10))
             if key in [QtCore.Qt.Key_N, QtCore.Qt.Key_Right]:
                 self.set_index(self._index['t'] + 1)
                 event.accept()
             elif key in [QtCore.Qt.Key_P, QtCore.Qt.Key_Left]:
                 self.set_index(self._index['t'] - 1)
                 event.accept()
-            elif (key == QtCore.Qt.Key_R):
+            elif key == QtCore.Qt.Key_R:
                 index = np.random.randint(0, self.reader.sizes['t'] - 1)
                 self.set_index(index)
                 event.accept()
