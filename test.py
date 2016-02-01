@@ -51,6 +51,10 @@ class TestViewer(unittest.TestCase):
         viewer = Viewer(RandomReader())
         viewer.show()
 
+    def test_viewer_3d(self):
+        viewer = Viewer(RandomReader(shape=(10, 128, 128)))
+        viewer.show()
+
     def test_viewer_pipeline(self):
         AddNoise = ViewerPipeline(add_noise, 'Add noise', dock='right') + \
                    Slider('noise_level', 0, 100, 0, orientation='vertical')

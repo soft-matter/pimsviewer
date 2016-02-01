@@ -37,14 +37,6 @@ class Display(with_metaclass(ABCMeta, object)):
     ndim = 2
     available = False
     @abstractproperty
-    def name(self):
-        pass
-
-    @abstractproperty
-    def ndim(self):
-        pass
-
-    @abstractproperty
     def widget(self):
         pass
 
@@ -70,7 +62,8 @@ class DisplayQt(Display):
     name = 'Qt'
     ndim = 2
     available = has_qimage2ndarray
-    def __init__(self, shape, mpp=1.):
+    def __init__(self, viewer, shape):
+        self.viewer = viewer
         self._widget = QtWidgets.QLabel()
         self._widget.setBackgroundRole(QtGui.QPalette.Base)
         self._widget.setScaledContents(True)
@@ -105,13 +98,13 @@ class DisplayMPL(Display):
     ndim = 2
     available = has_matplotlib
 
-    def __init__(self, shape, mpp=1.):
+    def __init__(self, viewer, shape):
         scale = 1
         dpi = mpl.rcParams['figure.dpi']
         h, w = shape[:2]
 
         figsize = np.array((w, h), dtype=float) / dpi * scale
-
+        self.viewer = viewer
         self.fig = plt.Figure(figsize=figsize, dpi=dpi)
         self.canvas = FigureCanvas(self.fig)
 
@@ -161,8 +154,8 @@ class DisplayMPL_mip(DisplayMPL):
     name = 'Matplotlib (MIP)'
     ndim = 3
     available = has_matplotlib
-    def __init__(self, shape, mpp=1.):
-        super(DisplayMPL_mip, self).__init__(shape[1:], mpp)
+    def __init__(self, viewer, shape):
+        super(DisplayMPL_mip, self).__init__(viewer, shape[1:])
 
     def update_image(self, image):
         super(DisplayMPL_mip, self).update_image(image.max(0))
@@ -173,37 +166,46 @@ class DisplayVolume(Display):
     ndim = 3
     available = has_pyqtgraph
 
-    def __init__(self, shape, mpp=None):
+    def __init__(self, viewer, shape):
         if len(shape) != 3:
             raise ValueError('Invalid image dimensionality')
+        self.viewer = viewer
+        self.shape = shape
+
+        # try to readout calibration
+        reader = self.viewer.reader
         try:
-            if len(mpp) != 3:
-                mpp = (1.,) * 3
-        except:
-            mpp = (1.,) * 3
+            mpp = reader.calibration
+        except AttributeError:
+            mpp = 1
+        if mpp is None:
+            mpp = 1
+        try:
+            mppZ = reader.calibrationZ
+        except AttributeError:
+            mppZ = mpp
+        shape_um = (self.shape[2] * mpp, self.shape[1] * mpp,
+                    self.shape[0] * mppZ)
 
-        gl_widget = GLViewWidget()
-        self._widget = gl_widget
+        self._widget = GLViewWidget()
+        self.volume = GLVolumeItem(np.zeros(tuple(self.shape[-1:-4:-1]) + (4,),
+                                            dtype=np.ubyte))
+        # set aspect ratio and reverse y axis
+        self.volume.scale(mpp, -mpp, mppZ)
+        self.volume.translate(0, shape_um[1], 0)
+        self.widget.addItem(self.volume)
 
-        self.data_plot = np.zeros(tuple(shape[-1:-4:-1]) + (4,), dtype=np.ubyte)
+        self.box = GLBoxItem(color=(255, 255, 255))
+        self.box.setSize(*shape_um)
+        self.widget.addItem(self.box)
 
-        volume = GLVolumeItem(self.data_plot)
-        volume.scale(mpp[2], -mpp[1], mpp[0])
-        shape_um = [m * s for (s, m) in zip(shape, mpp)][::-1]
-        volume.translate(*[shape_um[0] / -2, shape_um[1] / 2, shape_um[2] / -2])
-        gl_widget.setCameraPosition(azimuth=-45, elevation=30,
-                                    distance=max(shape_um) * 1.5)
-        gl_widget.addItem(volume)
-
-        box = GLBoxItem(color=(255, 255, 255))
-        box.setSize(*shape_um)
-        box.translate(*[s / -2 for s in shape_um])
-        gl_widget.addItem(box)
-
-        self.volume = volume
+        self.widget.setCameraPosition(azimuth=-45, elevation=30,
+                                     distance=max(shape) * 1.5)
+        self.widget.pan(*[s / 2 for s in shape_um], relative=False)
 
     def update_image(self, image):
-        new_image = self.volume.data.copy()
+        assert all([im == s for (im, s) in zip(image.shape[:3], self.shape)])
+        new_image = np.empty(tuple(self.shape[-1:-4:-1]) + (4,), dtype=np.ubyte)
         new_image[:, :, :, :3] = image.transpose([2, 1, 0, 3])
         new_image[:, :, :, 3] = np.mean(image, axis=3).T
         self.volume.setData(new_image)

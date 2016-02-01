@@ -48,7 +48,6 @@ class Viewer(QtWidgets.QMainWindow):
         self.slider_dock = None
         self.is_multichannel = False
         self.is_playing = False
-        self.mpp = None
         self._index = dict()
 
         # Start main loop
@@ -134,22 +133,6 @@ class Viewer(QtWidgets.QMainWindow):
         self.reader.iter_axes = ''
         index = reader.default_coords.copy()
 
-        # try to readout calibration
-        try:
-            mpp = reader.calibration
-        except AttributeError:
-            mpp = 1.
-        if mpp is None:
-            mpp = 1.
-        if 'z' in self.reader.sizes:
-            try:
-                mppZ = reader.calibrationZ
-            except AttributeError:
-                mppZ = mpp
-            self.mpp = (mppZ, mpp, mpp)
-        else:
-            self.mpp = (mpp, mpp)
-
         # add color tabs
         if 'c' in reader.sizes:
             self.is_multichannel = True
@@ -217,7 +200,7 @@ class Viewer(QtWidgets.QMainWindow):
 
         if self.renderer is not None:
             self.renderer.close()
-        self.renderer = display_class(shape, self.mpp)
+        self.renderer = display_class(self, shape)
 
         # connect the statusbar, only for matplotlib display mode
         if hasattr(self.renderer, 'connect_event'):
