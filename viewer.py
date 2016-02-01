@@ -312,6 +312,8 @@ class Viewer(QtWidgets.QMainWindow):
         self.is_multichannel = index == 0
         if index > 0:  # monochannel: update channel field
             self.update_index('c', index - 1)  # because 0 is multichannel
+        else:  # just update image
+            self.update_image()
 
     def play_callback(self, name, value):
         """Callback function for play checkbox."""
