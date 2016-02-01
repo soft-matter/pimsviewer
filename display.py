@@ -80,19 +80,6 @@ class DisplayQt(Display):
         self._widget.close()
 
 
-class FigureCanvas(FigureCanvasQTAgg):
-    """Canvas for displaying images."""
-    def __init__(self, figure, **kwargs):
-        self.fig = figure
-        super(FigureCanvas, self).__init__(self.fig)
-
-    def resizeEvent(self, event):
-        super(FigureCanvas, self).resizeEvent(event)
-        # Call to `resize_event` missing in FigureManagerQT.
-        # See https://github.com/matplotlib/matplotlib/pull/1585
-        self.resize_event()
-
-
 class DisplayMPL(Display):
     name = 'Matplotlib'
     ndim = 2
@@ -101,12 +88,13 @@ class DisplayMPL(Display):
     def __init__(self, viewer, shape):
         scale = 1
         dpi = mpl.rcParams['figure.dpi']
-        h, w = shape[:2]
+        self.shape = shape[:2]
+        h, w = self.shape[:2]
 
         figsize = np.array((w, h), dtype=float) / dpi * scale
         self.viewer = viewer
         self.fig = plt.Figure(figsize=figsize, dpi=dpi)
-        self.canvas = FigureCanvas(self.fig)
+        self.canvas = FigureCanvasQTAgg(self.fig)
 
         self.ax = self.fig.add_subplot(1, 1, 1)
         self.fig.subplots_adjust(left=0, bottom=0, right=1, top=1)
@@ -117,28 +105,18 @@ class DisplayMPL(Display):
 
         self._image_plot = self.ax.images[0]
         self._image_plot.set_clim((0, 255))
+        self._image_plot.set_extent((0, w, h, 0))
+        self.ax.set_xlim(0, w)
+        self.ax.set_ylim(h, 0)
 
-    def connect_event(self, event, callback):
-        """Connect callback function to matplotlib event and return id."""
-        cid = self.canvas.mpl_connect(event, callback)
-        return cid
-
-    def disconnect_event(self, callback_id):
-        """Disconnect callback by its id (returned by `connect_event`)."""
-        self.canvas.mpl_disconnect(callback_id)
+        self.canvas.mpl_connect('motion_notify_event', self.on_motion)
+        self.canvas.mpl_connect('scroll_event', self.on_scroll)
 
     def redraw(self):
         self.canvas.draw_idle()
 
     def update_image(self, image):
         self._image_plot.set_array(image)
-
-        # Adjust size if new image shape doesn't match the original
-        h, w = image.shape[:2]
-        self._image_plot.set_extent((0, w, h, 0))
-        self.ax.set_xlim(0, w)
-        self.ax.set_ylim(h, 0)
-
         self.redraw()
 
     @property
@@ -148,6 +126,58 @@ class DisplayMPL(Display):
     def close(self):
         plt.close(self.fig)
         self.canvas.close()
+
+    def on_motion(self, event):
+        if event.inaxes != self.ax:
+            return
+        x = int(event.xdata + 0.5)
+        y = int(event.ydata + 0.5)
+        try:
+            if self.viewer.is_multichannel:
+                val = self.viewer.image[:, y, x]
+            else:
+                val = self.viewer.image[y, x]
+            self.viewer.status = "%4s @ [%4s, %4s]" % (val, x, y)
+        except IndexError:
+            self.viewer.status = ""
+
+    def on_scroll(self, event):
+        if event.inaxes != self.ax:
+            return
+        x, y = event.xdata, event.ydata
+        max_height, max_width = self.shape
+        if x < 0 or y < 0 or x > max_width or y > max_height:
+            return
+        # get the current x and y limits
+        cur_xlim = self.ax.get_xlim()
+        cur_ylim = self.ax.get_ylim()
+        cur_width = cur_xlim[1] - cur_xlim[0]
+        cur_height = cur_ylim[0] - cur_ylim[1]  # y-axis is inverted
+        max_height, max_width = self.shape
+        scale_factor = min(0.8**event.step, max_width/cur_width,
+                           max_height/cur_height)
+        if scale_factor == 1.:
+            return
+        # calculate new limits
+        w = scale_factor*(cur_xlim[1] - cur_xlim[0])
+        h = scale_factor*(cur_ylim[0] - cur_ylim[1])  # y-axis is inverted
+        x -= w / 2
+        y -= h / 2
+
+        # shift box if any corner is out of bounds
+        if x < 0:
+            x = 0
+        if y < 0:
+            y = 0
+        if x + w > max_width:
+            x = max_width - w
+        if y + h > max_width:
+            y = max_height - h
+
+        # set new limits
+        self.ax.set_xlim([x, x + w])
+        self.ax.set_ylim([y + h, y])
+        self.redraw()
 
 
 class DisplayMPL_mip(DisplayMPL):

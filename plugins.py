@@ -46,8 +46,7 @@ class ViewerPipeline(Plugin):
     -----
     ViewerPipeline was partly based on `skimage.viewer.plugins.Plugin`
     """
-    # Signals used when viewers are linked to the Plugin output.
-    pipeline_changed = Signal(int, FunctionType)
+    # the class keeps a list of its instances
     instances = []
     def __init__(self, pipeline_func, name=None, height=0, width=400,
                  dock='bottom'):
@@ -60,11 +59,9 @@ class ViewerPipeline(Plugin):
 
         super(ViewerPipeline, self).__init__(height, width, dock)
 
-        # the class keeps a list of its instances. this means that the objects
-        # will not get garbage collected.
         ViewerPipeline.instances.append(self)
 
-    def attach(self, image_viewer):
+    def attach(self, viewer):
         """Attach the pipeline to an ImageViewer.
 
         Note that the ImageViewer will automatically call this method when the
@@ -75,13 +72,10 @@ class ViewerPipeline(Plugin):
         Also note that `attach` automatically calls the filter function so that
         the image matches the filtered value specified by attached widgets.
         """
-        super(ViewerPipeline, self).attach(image_viewer)
-
-        self.pipeline_changed.connect(self.image_viewer.update_pipeline)
-
-        self.image_viewer.plugins.append(self)
-        self.image_viewer.pipelines += [None]
-        self.pipeline_index = len(self.image_viewer.pipelines) - 1
+        super(ViewerPipeline, self).attach(viewer)
+        self.viewer.plugins.append(self)
+        self.viewer.pipelines += [None]
+        self.pipeline_index = len(self.viewer.pipelines) - 1
 
         self.process()
 
@@ -92,25 +86,26 @@ class ViewerPipeline(Plugin):
         kwargs = dict([(name, self._get_value(a))
                        for name, a in self.keyword_arguments.items()])
         func = lambda x: self.pipeline_func(x, *self.arguments, **kwargs)
-        self.pipeline_changed.emit(self.pipeline_index, func)
+        self.viewer.pipelines[self.pipeline_index] = func
+        self.viewer.update_view()
 
     def close(self):
         """Close the plugin and clean up."""
-        if self in self.image_viewer.plugins:
-            self.image_viewer.plugins.remove(self)
+        if self in self.viewer.plugins:
+            self.viewer.plugins.remove(self)
 
         # delete the pipeline
         if self.pipeline_index is not None:
-            del self.image_viewer.pipelines[self.pipeline_index]
+            del self.viewer.pipelines[self.pipeline_index]
         # decrease pipeline_index for the other pipelines
-        for plugin in self.image_viewer.plugins:
+        for plugin in self.viewer.plugins:
             try:
                 if plugin.pipeline_index > self.pipeline_index:
                     plugin.pipeline_index -= 1
             except AttributeError:
                 pass  # no pipeline_index
 
-        self.image_viewer.update_image()
+        self.viewer.update_view()
 
         super(ViewerPipeline, self).close()
 
@@ -128,17 +123,17 @@ class ViewerPlotting(Plugin):
         self.artist = None
         self.plot_func = plot_func
 
-    def attach(self, image_viewer):
-        super(ViewerPlotting, self).attach(image_viewer)
+    def attach(self, viewer):
+        super(ViewerPlotting, self).attach(viewer)
 
-        if type(image_viewer.renderer) is not DisplayMPL:
-            image_viewer.update_display(DisplayMPL)
+        if type(viewer.renderer) is not DisplayMPL:
+            viewer.update_display(DisplayMPL)
 
-        self.fig = image_viewer.renderer.fig
-        self.ax = image_viewer.renderer.ax
-        self.canvas = image_viewer.renderer.widget
+        self.fig = viewer.renderer.fig
+        self.ax = viewer.renderer.ax
+        self.canvas = viewer.renderer.widget
 
-        self.image_viewer.original_image_changed.connect(self.process)
+        self.viewer.original_image_changed.connect(self.process)
 
         self.process()
 
@@ -147,7 +142,7 @@ class ViewerPlotting(Plugin):
                        for name, a in self.keyword_arguments.items()])
         if self.artist is not None:
             remove_artists(self.artist)
-        self.artist = self.plot_func(self.image_viewer.image, *self.arguments,
+        self.artist = self.plot_func(self.viewer.image, *self.arguments,
                                      ax=self.ax, **kwargs)
         self.canvas.draw_idle()
 
@@ -161,22 +156,22 @@ class ViewerAnnotate(Plugin):
         self.features = features
         self.cropped = cropped
 
-    def attach(self, image_viewer):
-        super(ViewerAnnotate, self).attach(image_viewer)
+    def attach(self, viewer):
+        super(ViewerAnnotate, self).attach(viewer)
 
-        if type(image_viewer.renderer) is not DisplayMPL:
-            image_viewer.update_display(DisplayMPL)
+        if type(viewer.renderer) is not DisplayMPL:
+            viewer.update_display(DisplayMPL)
 
-        self.fig = image_viewer.renderer.fig
-        self.ax = image_viewer.renderer.ax
-        self.canvas = image_viewer.renderer.widget
+        self.fig = viewer.renderer.fig
+        self.ax = viewer.renderer.ax
+        self.canvas = viewer.renderer.widget
 
-        self.image_viewer.original_image_changed.connect(self.process)
+        self.viewer.original_image_changed.connect(self.process)
 
         self.process()
 
     def process(self, *widget_arg):
-        frame_no = self.image_viewer.index['t']
+        frame_no = self.viewer.index['t']
         _plot_style = dict(markersize=15, markeredgewidth=2,
                            markerfacecolor='none', markeredgecolor='r',
                            marker='o', linestyle='none')

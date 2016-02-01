@@ -11,7 +11,6 @@ from skimage.viewer.widgets import BaseWidget, CheckBox, Text, ComboBox
 class DockWidget(QtWidgets.QDockWidget):
     """A QDockWidget that emits a signal when closed."""
     close_event_signal = Signal()
-
     def closeEvent(self, event):
         self.close_event_signal.emit()
         super(DockWidget, self).closeEvent(event)
@@ -57,6 +56,7 @@ class VideoTimer(QtCore.QTimer):
         self.next_frame.emit(self.index)
 
 
+# copied from skimage.viewer.widgets with some slight changes
 class Slider(BaseWidget):
     """Slider widget for adjusting numeric parameters.
 

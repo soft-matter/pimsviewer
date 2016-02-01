@@ -91,12 +91,12 @@ class Viewer(QtWidgets.QMainWindow):
         self.setCentralWidget(self.main_widget)
         self.main_layout = QtWidgets.QGridLayout(self.main_widget)
 
-        self.show_status_message = self.statusBar().showMessage
-
         self.resize(width, height)
 
         self.setAcceptDrops(True)
         self._dropped.connect(self._open_dropped)
+
+        self._status_bar = self.statusBar()
 
         self._timer = VideoTimer(self)
         if reader is not None:
@@ -123,7 +123,7 @@ class Viewer(QtWidgets.QMainWindow):
         if self.reader is not None:
             self.close_reader()
         self.update_reader(reader)
-        self.show_status_message('Opened {}'.format(filename))
+        self.status = 'Opened {}'.format(filename)
 
     def update_reader(self, reader):
         """Load a new reader into the Viewer."""
@@ -131,7 +131,7 @@ class Viewer(QtWidgets.QMainWindow):
             reader = FramesSequence_Wrapper(reader)
         self.reader = reader
         self.reader.iter_axes = ''
-        index = reader.default_coords.copy()
+        self._index = reader.default_coords.copy()
 
         # add color tabs
         if 'c' in reader.sizes:
@@ -151,10 +151,9 @@ class Viewer(QtWidgets.QMainWindow):
         for axis in reader.sizes:
             if axis in ['x', 'y', 'c'] or reader.sizes[axis] <= 1:
                 continue
-            self.sliders[axis] = Slider(axis, low=0, high=reader.sizes[axis] - 1,
-                                        value=index[axis], update_on='release',
-                                        value_type='int',
-                                        callback=self.update_index)
+            self.sliders[axis] = Slider(axis, low=0, high=reader.sizes[axis]-1,
+             value=self._index[axis], update_on='release', value_type='int',
+             callback=lambda x, y: self.set_index(y, x))
 
         if len(self.sliders) > 0:
             slider_widget = QtWidgets.QWidget()
@@ -174,7 +173,6 @@ class Viewer(QtWidgets.QMainWindow):
             self.addDockWidget(Qt.BottomDockWidgetArea, self.slider_dock)
 
         self.update_display()
-        self.index = index
 
     def close_reader(self):
         if self.is_playing:
@@ -202,28 +200,21 @@ class Viewer(QtWidgets.QMainWindow):
             self.renderer.close()
         self.renderer = display_class(self, shape)
 
-        # connect the statusbar, only for matplotlib display mode
-        if hasattr(self.renderer, 'connect_event'):
-            self.renderer.connect_event('motion_notify_event',
-                                        self._update_mouse_position)
-
         self.renderer.widget.setSizePolicy(QtGui.QSizePolicy.Ignored,
                                            QtGui.QSizePolicy.Ignored)
         self.renderer.widget.updateGeometry()
         self.main_layout.addWidget(self.renderer.widget, 0, 0)
-        #self.update_index()
+        self.update_image()
 
-    def update_reader_axes(self):
-        """Make sure that the reader bundle_axes settings are correct"""
-        try:
-            ndim = self.renderer.ndim
-        except AttributeError:
-            ndim = 2
+    def update_image(self):
+        """Update the image that is being viewed."""
+        ndim = self.renderer.ndim
         if ndim == 3 and 'z' not in self.reader.sizes:
             raise ValueError('z axis does not exist: cannot display in 3D')
         if self.is_multichannel and 'c' not in self.reader.sizes:
             raise ValueError('c axis does not exist: cannot display multicolor')
 
+        # Make sure that the reader bundle_axes settings are correct
         bundle_axes = ''
         if self.is_multichannel:
             bundle_axes += 'c'
@@ -231,13 +222,25 @@ class Viewer(QtWidgets.QMainWindow):
             bundle_axes += 'z'
         self.reader.bundle_axes = bundle_axes + 'yx'
 
-    def update_index(self, name, value):
-        new_index = self.index.copy()
-        new_index[name] = value
-        self.index = new_index
+        # Update slider positions
+        for name in self.sliders:
+            self.sliders[name].val = self._index[name]
 
-    def update_image(self):
-        """Update the image that is being viewed."""
+        # Update image
+        self.reader.default_coords.update(self._index)
+        image = self.reader[0]
+        if 't' in self._index:
+            image.frame_no = self._index['t']
+        self.original_image = image
+        self.update_view()
+
+    def update_pipeline(self, index, func):
+        """This is called by the ViewerPipeline to update its effect."""
+        self.pipelines[index] = func
+        self.update_view()
+
+    def update_view(self):
+        """Apply piplines to image that is being viewed."""
         if self.original_image is None:
             return
         image = self.original_image.copy()
@@ -245,38 +248,24 @@ class Viewer(QtWidgets.QMainWindow):
             image = func(image)
         self.image = image
 
-    def update_pipeline(self, index, func):
-        """This is called by the ViewerPipeline to update its effect."""
-        self.pipelines[index] = func
-        self.update_image()
-
     @property
     def index(self):
-        return self._index
-    @index.setter
-    def index(self, index):
-        for key in index:
-            if key not in self.reader.sizes:
-                return ValueError("Dimension '{}' not in reader".format(key))
-            # clip value if necessary
-            if index[key] < 0:
-                index[key] = 0
-            elif index[key] >= self.reader.sizes[key]:
-                index[key] = self.reader.sizes[key] - 1
+        return self._index.copy()  # copy the dict to make it read only
+
+    def set_index(self, value=0, name='t'):
+        if name not in self.reader.sizes:
+            return ValueError("Dimension '{}' not in reader".format(name))
+        # clip value if necessary
+        if value < 0:
+            value = 0
+        elif value >= self.reader.sizes[name]:
+            value[name] = self.reader.sizes[name] - 1
         try:
-            if all((self._index[key] == index[key] for key in index)):
+            if self._index[name] == value:
                 return  # do nothing when no coordinate was changed
         except KeyError:
             pass  # but continue when a coordinate did not exist
-        self._index.update(index)
-        self.update_reader_axes()
-        for name in self.sliders:
-            self.sliders[name].val = index[name]
-        self.reader.default_coords.update(index)
-        image = self.reader[0]
-        if 't' in index:
-            image.frame_no = index['t']
-        self.original_image = image
+        self._index[name] = value
         self.update_image()
 
     @property
@@ -294,7 +283,7 @@ class Viewer(QtWidgets.QMainWindow):
         """Callback function for channel tabs."""
         self.is_multichannel = index == 0
         if index > 0:  # monochannel: update channel field
-            self.update_index('c', index - 1)  # because 0 is multichannel
+            self.set_index(index - 1, 'c')  # because 0 is multichannel
         else:  # just update image
             self.update_image()
 
@@ -315,8 +304,8 @@ class Viewer(QtWidgets.QMainWindow):
             except AttributeError:
                 self._timer.fps = 25.
 
-        self._timer.start(self.index['t'], self.reader.sizes['t'])
-        self._timer.next_frame.connect(lambda x: self.update_index('t', x))
+        self._timer.start(self._index['t'], self.reader.sizes['t'])
+        self._timer.next_frame.connect(lambda x: self.set_index(x))
         self.is_playing = True
 
     def stop(self):
@@ -366,20 +355,6 @@ class Viewer(QtWidgets.QMainWindow):
 
         return self._result_value
 
-    def _update_mouse_position(self, event):
-        if event.inaxes and event.inaxes.get_navigate():
-            x = int(event.xdata + 0.5)
-            y = int(event.ydata + 0.5)
-            try:
-                if self.is_multichannel:
-                    val = self.image[:, y, x]
-                else:
-                    val = self.image[y, x]
-                msg = "%4s @ [%4s, %4s]" % (val, x, y)
-            except IndexError:
-                msg = ""
-            self.show_status_message(msg)
-
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls:
             event.accept()
@@ -410,19 +385,26 @@ class Viewer(QtWidgets.QMainWindow):
                 self.open_file(fn)
                 break
 
+    @property
+    def status(self):
+        return None
+    @status.setter
+    def status(self, value):
+        self._status_bar.showMessage(str(value))
+
     def keyPressEvent(self, event):
         if type(event) == QtWidgets.QKeyEvent:
             key = event.key()
             # Number keys (code: 0 = key 48, 9 = key 57) move to deciles
             if key in [QtCore.Qt.Key_N, QtCore.Qt.Key_Right]:
-                self.update_index('t', self.index['t'] + 1)
+                self.set_index(self._index['t'] + 1)
                 event.accept()
             elif key in [QtCore.Qt.Key_P, QtCore.Qt.Key_Left]:
-                self.update_index('t', self.index['t'] - 1)
+                self.set_index(self._index['t'] - 1)
                 event.accept()
             elif (key == QtCore.Qt.Key_R):
                 index = np.random.randint(0, self.reader.sizes['t'] - 1)
-                self.update_index('t', index)
+                self.set_index(index)
                 event.accept()
             elif key == QtCore.Qt.Key_Space:
                 if self.is_playing:
@@ -446,13 +428,13 @@ class Viewer(QtWidgets.QMainWindow):
             event.ignore()
 
     def wheelEvent(self, event):
-        if 'z' in self.index:
-            new_z = self.index['z'] + int(event.delta() // 120)
+        if 'z' in self._index:
+            new_z = self._index['z'] + int(event.delta() // 120)
             if new_z < 0:
                 new_z = 0
             if new_z >= self.reader.sizes['z'] - 1:
                 new_z = self.reader.sizes['z'] - 1
-            self.update_index('z', new_z)
+            self.set_index(new_z, 'z')
 
 
 class Plugin(QtWidgets.QDialog):
@@ -462,7 +444,7 @@ class Plugin(QtWidgets.QDialog):
 
         self.dock = dock
 
-        self.image_viewer = None
+        self.viewer = None
 
         self.setWindowTitle(self.name)
         self.layout = QtWidgets.QGridLayout(self)
@@ -472,11 +454,11 @@ class Plugin(QtWidgets.QDialog):
         self.arguments = []
         self.keyword_arguments = {}
 
-    def attach(self, image_viewer):
-        """Attach the Plugin to an ImageViewer."""
-        self.setParent(image_viewer)
+    def attach(self, viewer):
+        """Attach the Plugin to a Viewer."""
+        self.setParent(viewer)
         self.setWindowFlags(QtCore.Qt.Dialog)
-        self.image_viewer = image_viewer
+        self.viewer = viewer
 
     def add_widget(self, widget):
         """Add widget to pipeline.

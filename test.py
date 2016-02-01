@@ -42,6 +42,9 @@ class RandomReader(FramesSequence):
 def add_noise(img, noise_level):
     return img + np.random.random(img.shape) * noise_level
 
+AddNoise = ViewerPipeline(add_noise, 'Add noise', dock='right') + \
+           Slider('noise_level', 0, 100, 0, orientation='vertical')
+
 class TestViewer(unittest.TestCase):
     def test_viewer_noreader(self):
         viewer = Viewer()
@@ -56,8 +59,6 @@ class TestViewer(unittest.TestCase):
         viewer.show()
 
     def test_viewer_pipeline(self):
-        AddNoise = ViewerPipeline(add_noise, 'Add noise', dock='right') + \
-                   Slider('noise_level', 0, 100, 0, orientation='vertical')
         viewer = Viewer(RandomReader()) + AddNoise
         viewer.show()
 
@@ -100,8 +101,7 @@ def tp_locate(image, radius, minmass, separation, noise_size, ax):
 #             Slider('r', 0, 1, 0.2125, orientation='vertical') + \
 #             Slider('g', 0, 1, 0.7154, orientation='vertical') + \
 #             Slider('b', 0, 1, 0.0721, orientation='vertical')
-AddNoise = ViewerPipeline(add_noise, 'Add noise', dock='right') + \
-           Slider('noise_level', 0, 100, 0, orientation='vertical')
+
 Locate = ViewerPlotting(tp_locate, 'Locate', dock='right') + \
        Slider('radius', 1, 20, 7, value_type='int', orientation='vertical') + \
        Slider('separation', 1, 20, 7, value_type='float', orientation='vertical') + \
