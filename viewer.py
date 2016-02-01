@@ -412,16 +412,27 @@ class Viewer(QtWidgets.QMainWindow):
                 else:
                     self.play()
                 event.accept()
-            elif self.is_playing:
-                if key == QtCore.Qt.Key_Plus:
+            elif key == QtCore.Qt.Key_BracketRight:
+                if self.is_playing:
                     self._timer.fps *= 1.2
-                elif key == QtCore.Qt.Key_Minus:
+            elif key == QtCore.Qt.Key_BracketLeft:
+                if self.is_playing:
                     self._timer.fps *= 0.8
-                elif key == QtCore.Qt.Key_Equal:
+            elif key == QtCore.Qt.Key_Equal:
+                if self.is_playing:
                     try:
                         self._timer.fps = self.reader.frame_rate
                     except AttributeError:
                         self._timer.fps = 25.
+            elif key == QtCore.Qt.Key_Plus:
+                if hasattr(self.renderer, 'zoom'):
+                    self.renderer.zoom(1)
+            elif key == QtCore.Qt.Key_Minus:
+                if hasattr(self.renderer, 'zoom'):
+                    self.renderer.zoom(-1)
+            elif key == QtCore.Qt.Key_Z:
+                if hasattr(self.renderer, 'zoom'):
+                    self.renderer.zoom()
             else:
                 event.ignore()
         else:

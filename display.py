@@ -109,7 +109,10 @@ class DisplayMPL(Display):
         self.ax.set_xlim(0, w)
         self.ax.set_ylim(h, 0)
 
+        self.shift_start = None
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
+        self.canvas.mpl_connect('button_press_event', self.on_press)
+        self.canvas.mpl_connect('button_release_event', self.on_release)
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
 
     def redraw(self):
@@ -127,35 +130,27 @@ class DisplayMPL(Display):
         plt.close(self.fig)
         self.canvas.close()
 
-    def on_motion(self, event):
-        if event.inaxes != self.ax:
-            return
-        x = int(event.xdata + 0.5)
-        y = int(event.ydata + 0.5)
-        try:
-            if self.viewer.is_multichannel:
-                val = self.viewer.image[:, y, x]
-            else:
-                val = self.viewer.image[y, x]
-            self.viewer.status = "%4s @ [%4s, %4s]" % (val, x, y)
-        except IndexError:
-            self.viewer.status = ""
-
-    def on_scroll(self, event):
-        if event.inaxes != self.ax:
-            return
-        x, y = event.xdata, event.ydata
-        max_height, max_width = self.shape
-        if x < 0 or y < 0 or x > max_width or y > max_height:
-            return
+    def zoom(self, step=None, center=None):
         # get the current x and y limits
         cur_xlim = self.ax.get_xlim()
         cur_ylim = self.ax.get_ylim()
         cur_width = cur_xlim[1] - cur_xlim[0]
         cur_height = cur_ylim[0] - cur_ylim[1]  # y-axis is inverted
         max_height, max_width = self.shape
-        scale_factor = min(0.8**event.step, max_width/cur_width,
-                           max_height/cur_height)
+
+        if center is None:
+            y = (cur_ylim[0] + cur_ylim[1]) / 2
+            x = (cur_xlim[0] + cur_xlim[1]) / 2
+        else:
+            y, x = center
+
+        if x < 0 or y < 0 or x > max_width or y > max_height:
+            return
+        if step is None:
+            scale_factor = min(max_width/cur_width, max_height/cur_height)
+        else:
+            scale_factor = min(0.8**step, max_width/cur_width,
+                               max_height/cur_height)
         if scale_factor == 1.:
             return
         # calculate new limits
@@ -171,13 +166,85 @@ class DisplayMPL(Display):
             y = 0
         if x + w > max_width:
             x = max_width - w
-        if y + h > max_width:
+        if y + h > max_height:
             y = max_height - h
 
         # set new limits
         self.ax.set_xlim([x, x + w])
         self.ax.set_ylim([y + h, y])
         self.redraw()
+
+    def shift(self, dy, dx):
+        """Shifts the view with (dy, dx)"""
+        cur_xlim = self.ax.get_xlim()
+        cur_ylim = self.ax.get_ylim()
+        max_height, max_width = self.shape
+
+        x1 = cur_xlim[0] - dx
+        y1 = cur_ylim[1] - dy
+        x2 = cur_xlim[1] - dx
+        y2 = cur_ylim[0] - dy
+
+        if x1 < 0:
+            x2 -= x1
+            x1 = 0
+        if y1 < 0:
+            y2 -= y1
+            y1 = 0
+        if x2 > max_width:
+            x1 -= (x2 - max_width)
+            x2 = max_width
+        if y2 > max_height:
+            y1 -= (y2 - max_height)
+            y2 = max_height
+
+        # set new limits
+        self.ax.set_xlim([x1, x2])
+        self.ax.set_ylim([y2, y1])
+        self.redraw()
+
+    def center(self, y, x):
+        """Centers the view on (y, x)"""
+        cur_xlim = self.ax.get_xlim()
+        cur_ylim = self.ax.get_ylim()
+        self.shift((cur_ylim[0] + cur_ylim[1]) / 2 - y,
+                   (cur_xlim[0] + cur_xlim[1]) / 2 - x)
+
+    def on_press(self, event):
+        if event.inaxes != self.ax:
+            return
+        if event.button == 1 and not event.dblclick:  # left mouse button
+            self.shift_start = (event.ydata, event.xdata)
+        elif event.button == 1 and event.dblclick:  # double click
+            self.center(event.ydata, event.xdata)
+
+    def on_release(self, event):
+        if event.inaxes != self.ax:
+            return
+        if event.button == 1 and self.shift_start is not None:  # left mouse button
+            self.shift(event.ydata - self.shift_start[0],
+                       event.xdata - self.shift_start[1])
+            self.shift_start = None
+
+    def on_motion(self, event):
+        if event.inaxes != self.ax:
+            self.shift_start = None
+            return
+        try:
+            x = int(event.xdata + 0.5)
+            y = int(event.ydata + 0.5)
+            if self.viewer.is_multichannel:
+                val = self.viewer.image[:, y, x]
+            else:
+                val = self.viewer.image[y, x]
+            self.viewer.status = "%4s @ [%4s, %4s]" % (val, x, y)
+        except IndexError:
+            self.viewer.status = ""
+
+    def on_scroll(self, event):
+        if event.inaxes != self.ax:
+            return
+        self.zoom(event.step, (event.ydata, event.xdata))
 
 
 class DisplayMPL_mip(DisplayMPL):
