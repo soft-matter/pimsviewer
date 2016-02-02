@@ -35,13 +35,12 @@ class Viewer(QtWidgets.QMainWindow):
                   'left': Qt.LeftDockWidgetArea,
                   'right': Qt.RightDockWidgetArea}
     _dropped = Signal(list)
-    original_image_changed = Signal()
+    image_changed = Signal()
 
     def __init__(self, reader=None, width=800, height=600):
-        self.pipelines = []
         self.plugins = []
-        self.reader = None
-        self.original_image = None
+        self._readers = []
+        self._img = None
         self.renderer = None
         self.sliders = dict()
         self.channel_tabs = None
@@ -125,12 +124,19 @@ class Viewer(QtWidgets.QMainWindow):
         self.update_reader(reader)
         self.status = 'Opened {}'.format(filename)
 
+    @property
+    def reader(self):
+        if len(self._readers) == 0:
+            return None
+        else:
+            return self._readers[-1]
+
     def update_reader(self, reader):
         """Load a new reader into the Viewer."""
         if not isinstance(reader, FramesSequenceND):
             reader = FramesSequence_Wrapper(reader)
-        self.reader = reader
-        self.reader.iter_axes = ''
+        self._readers = [reader]
+        reader.iter_axes = ''
         self._index = reader.default_coords.copy()
 
         # add color tabs
@@ -178,6 +184,7 @@ class Viewer(QtWidgets.QMainWindow):
         if self.is_playing:
             self.stop()
         self.reader.close()
+        self._readers = []
         self.renderer.close()
         if self.slider_dock is not None:
             self.slider_dock.close()
@@ -231,22 +238,14 @@ class Viewer(QtWidgets.QMainWindow):
         image = self.reader[0]
         if 't' in self._index:
             image.frame_no = self._index['t']
-        self.original_image = image
-        self.update_view()
-
-    def update_pipeline(self, index, func):
-        """This is called by the ViewerPipeline to update its effect."""
-        self.pipelines[index] = func
-        self.update_view()
+        self.image = image
 
     def update_view(self):
-        """Apply piplines to image that is being viewed."""
-        if self.original_image is None:
+        """Emit image to display."""
+        if self.image is None:
             return
-        image = self.original_image.copy()
-        for func in self.pipelines:
-            image = func(image)
-        self.image = image
+        self.renderer.image = to_rgb_uint8(self.image, autoscale=True)
+        self.image_changed.emit()
 
     @property
     def index(self):
@@ -278,8 +277,7 @@ class Viewer(QtWidgets.QMainWindow):
     @image.setter
     def image(self, image):
         self._img = image
-        self.renderer.image = to_rgb_uint8(image, autoscale=True)
-        self.original_image_changed.emit()
+        self.update_view()
 
     def channel_tab_callback(self, index):
         """Callback function for channel tabs."""
@@ -334,16 +332,6 @@ class Viewer(QtWidgets.QMainWindow):
         self.add_plugin(plugin)
         return self
 
-    def closeEvent(self, event):
-        # obtain the result values before everything is closed
-        result = [None] * (len(self.pipelines) + 1)
-        result[0] = self.reader
-        for i, func in enumerate(self.pipelines):
-            result[i + 1] = pipeline(func)(result[i])
-        self._result_value = result
-
-        super(Viewer, self).closeEvent(event)
-
     def show(self, main_window=True):
         """Show Viewer and attached ViewerPipelines."""
         self.move(0, 0)
@@ -355,7 +343,7 @@ class Viewer(QtWidgets.QMainWindow):
         if main_window:
             start_qtapp()
 
-        return self._result_value
+        return self._readers
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls:

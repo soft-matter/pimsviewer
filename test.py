@@ -9,7 +9,7 @@ import nose
 import numpy as np
 from numpy.testing import (assert_equal, assert_almost_equal, assert_allclose)
 from pimsviewer import Viewer, ViewerPipeline, Slider, ViewerAnnotate
-from pims import FramesSequence, FramesSequenceND, Frame
+from pims import FramesSequence, FramesSequenceND, Frame, pipeline
 import pandas as pd
 
 
@@ -39,11 +39,20 @@ class RandomReader(FramesSequence):
         return Frame(frame, frame_no=i)
 
 
+@pipeline
 def add_noise(img, noise_level):
-    return img + np.random.random(img.shape) * noise_level
+    return img + (np.random.random(img.shape) * noise_level).astype(img.dtype)
 
 AddNoise = ViewerPipeline(add_noise, 'Add noise', dock='right') + \
            Slider('noise_level', 0, 100, 0, orientation='vertical')
+
+@pipeline
+def no_red(img, level):
+    img[:, :, 0] = level
+    return img
+
+NoRed = ViewerPipeline(no_red, 'No red', dock='left') + \
+                       Slider('level', 0, 100, 0, orientation='vertical')
 
 class TestViewer(unittest.TestCase):
     def test_viewer_noreader(self):
@@ -60,6 +69,10 @@ class TestViewer(unittest.TestCase):
 
     def test_viewer_pipeline(self):
         viewer = Viewer(RandomReader()) + AddNoise
+        viewer.show()
+
+    def test_viewer_pipeline_multiple(self):
+        viewer = Viewer(RandomReader(shape=(128, 128, 3))) + AddNoise + NoRed
         viewer.show()
 
     def test_viewer_annotate(self):

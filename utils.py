@@ -76,7 +76,7 @@ class FramesSequence_Wrapper(FramesSequenceND):
     """This class wraps a FramesSequence so that it behaves as a
     FramesSequenceND. All attributes are forwarded to the containing reader."""
     colors_RGB = dict(colors=[(1., 0., 0.), (0., 1., 0.), (0., 0., 1.)])
-
+    propagate_attrs = ['sizes', 'default_coords', 'bundle_axes', 'iter_axes']
     def __init__(self, frames_sequence):
         self._reader = frames_sequence
         self._last_i = None

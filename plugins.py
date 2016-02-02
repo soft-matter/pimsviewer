@@ -1,6 +1,7 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+from pims import pipeline
 from pimsviewer.viewer import Plugin
 from types import FunctionType
 from pimsviewer.qt import Signal
@@ -74,20 +75,33 @@ class ViewerPipeline(Plugin):
         """
         super(ViewerPipeline, self).attach(viewer)
         self.viewer.plugins.append(self)
-        self.viewer.pipelines += [None]
-        self.pipeline_index = len(self.viewer.pipelines) - 1
+        self.viewer._readers += [None]
+        self.reader_index = len(self.viewer._readers) - 1
+        self.viewer._readers[self.reader_index] = self.viewer._readers[self.reader_index - 1]
 
         self.process()
+
+    def _process(self):
+        kwargs = dict([(name, self._get_value(a))
+                       for name, a in self.keyword_arguments.items()])
+        self.viewer._readers[self.reader_index] = \
+            self.pipeline_func(self.viewer._readers[self.reader_index - 1],
+                               *self.arguments, **kwargs)
 
     def process(self, *widget_arg):
         """Send the changed pipeline function to the Viewer. """
         # `widget_arg` is passed by the active widget but is unused since all
         # filter arguments are pulled directly from attached the widgets.
-        kwargs = dict([(name, self._get_value(a))
-                       for name, a in self.keyword_arguments.items()])
-        func = lambda x: self.pipeline_func(x, *self.arguments, **kwargs)
-        self.viewer.pipelines[self.pipeline_index] = func
-        self.viewer.update_view()
+        to_process = [None] * (len(self.viewer._readers) - self.reader_index)
+        for plugin in self.viewer.plugins:
+            try:
+                if plugin.reader_index >= self.reader_index:
+                    to_process[plugin.reader_index - self.reader_index] = plugin
+            except AttributeError:
+                pass  # no pipeline_index
+        for plugin in to_process:
+            plugin._process()
+        self.viewer.update_image()
 
     def close(self):
         """Close the plugin and clean up."""
@@ -95,13 +109,13 @@ class ViewerPipeline(Plugin):
             self.viewer.plugins.remove(self)
 
         # delete the pipeline
-        if self.pipeline_index is not None:
-            del self.viewer.pipelines[self.pipeline_index]
+        if self.reader_index is not None:
+            del self.viewer._readers[self.reader_index]
         # decrease pipeline_index for the other pipelines
         for plugin in self.viewer.plugins:
             try:
-                if plugin.pipeline_index > self.pipeline_index:
-                    plugin.pipeline_index -= 1
+                if plugin.reader_index > self.reader_index:
+                    plugin.reader_index -= 1
             except AttributeError:
                 pass  # no pipeline_index
 
