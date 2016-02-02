@@ -109,10 +109,8 @@ class DisplayMPL(Display):
         self.ax.set_xlim(0, w)
         self.ax.set_ylim(h, 0)
 
-        self.shift_start = None
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
         self.canvas.mpl_connect('button_press_event', self.on_press)
-        self.canvas.mpl_connect('button_release_event', self.on_release)
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
 
     def redraw(self):
@@ -213,23 +211,10 @@ class DisplayMPL(Display):
     def on_press(self, event):
         if event.inaxes != self.ax:
             return
-        if event.button == 1 and not event.dblclick:  # left mouse button
-            self.shift_start = (event.ydata, event.xdata)
-        elif event.button == 1 and event.dblclick:  # double click
+        if event.button == 1 and event.dblclick:  # double click: center
             self.center(event.ydata, event.xdata)
 
-    def on_release(self, event):
-        if event.inaxes != self.ax:
-            return
-        if event.button == 1 and self.shift_start is not None:  # left mouse button
-            self.shift(event.ydata - self.shift_start[0],
-                       event.xdata - self.shift_start[1])
-            self.shift_start = None
-
     def on_motion(self, event):
-        if event.inaxes != self.ax:
-            self.shift_start = None
-            return
         try:
             x = int(event.xdata + 0.5)
             y = int(event.ydata + 0.5)
@@ -238,7 +223,7 @@ class DisplayMPL(Display):
             else:
                 val = self.viewer.image[y, x]
             self.viewer.status = "%4s @ [%4s, %4s]" % (val, x, y)
-        except IndexError:
+        except (TypeError, IndexError):
             self.viewer.status = ""
 
     def on_scroll(self, event):

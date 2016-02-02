@@ -203,3 +203,19 @@ class Slider(BaseWidget):
             self.editbox.setText(value_str)
         except AttributeError:
             pass
+
+
+class Button(BaseWidget):
+    def __init__(self, name=None, caption='', callback=None):
+        super(Button, self).__init__(name)
+        self._button = QtWidgets.QPushButton(caption)
+        self._button.setDefault(False)
+        self.layout = QtWidgets.QHBoxLayout(self)
+        self.layout.addWidget(self._button)
+        if callback is not None:
+            self.callback = callback
+            self._button.clicked.connect(self.on_click)
+
+    def on_click(self):
+        self._button.clearFocus()
+        self.callback()
