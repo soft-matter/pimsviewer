@@ -7,14 +7,13 @@ from functools import partial
 from itertools import chain
 
 import numpy as np
-from slicerator import pipeline
 from pims import FramesSequence, FramesSequenceND
 
 from pimsviewer.widgets import (CheckBox, DockWidget, VideoTimer, Slider)
 from pimsviewer.qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
                            init_qtapp, start_qtapp)
 from pimsviewer.display import Display, DisplayMPL
-from pimsviewer.utils import (FramesSequence_Wrapper, recursive_subclasses,
+from pimsviewer.utils import (wrap_frames_sequence, recursive_subclasses,
                               to_rgb_uint8)
 
 
@@ -134,7 +133,7 @@ class Viewer(QtWidgets.QMainWindow):
     def update_reader(self, reader):
         """Load a new reader into the Viewer."""
         if not isinstance(reader, FramesSequenceND):
-            reader = FramesSequence_Wrapper(reader)
+            reader = wrap_frames_sequence(reader)
         self._readers = [reader]
         reader.iter_axes = ''
         self._index = reader.default_coords.copy()

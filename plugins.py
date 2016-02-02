@@ -1,10 +1,7 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-from pims import pipeline
 from pimsviewer.viewer import Plugin
-from types import FunctionType
-from pimsviewer.qt import Signal
 from pimsviewer.display import DisplayMPL
 
 

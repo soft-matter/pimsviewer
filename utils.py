@@ -72,111 +72,133 @@ def to_rgb_uint8(image, autoscale=True):
     return image
 
 
-class FramesSequence_Wrapper(FramesSequenceND):
-    """This class wraps a FramesSequence so that it behaves as a
-    FramesSequenceND. All attributes are forwarded to the containing reader."""
-    colors_RGB = dict(colors=[(1., 0., 0.), (0., 1., 0.), (0., 0., 1.)])
-    propagate_attrs = ['sizes', 'default_coords', 'bundle_axes', 'iter_axes']
-    def __init__(self, frames_sequence):
-        self._reader = frames_sequence
-        self._last_i = None
-        self._last_frame = None
-        shape = frames_sequence.frame_shape
-        ndim = len(shape)
+def wrap_frames_sequence(frames):
+    shape = frames.frame_shape
+    ndim = len(shape)
 
-        try:
-            colors = self._reader.metadata['colors']
-            if len(colors) != shape[0]:
-                colors = None
-        except (KeyError, AttributeError):
+    try:
+        colors = frames.metadata['colors']
+        if len(colors) != shape[0]:
             colors = None
+    except (KeyError, AttributeError):
+        colors = None
 
-        c = None
-        z = None
-        self.is_RGB = False
-        # 2D, grayscale
-        if ndim == 2:
-            y, x = shape
-        # 2D, has colors attribute
-        elif ndim == 3 and colors is not None:
-            c, y, x = shape
-        # 2D, RGB
-        elif ndim == 3 and shape[2] in [3, 4]:
-            y, x, c = shape
-            self.is_RGB = True
-        # 2D, is multichannel
-        elif ndim == 3 and shape[0] < 5:  # guessing; could be small z-stack
-            c, y, x = shape
-        # 3D, grayscale
-        elif ndim == 3:
-            z, y, x = shape
-        # 3D, has colors attribute
-        elif ndim == 4 and colors is not None:
-            c, z, y, x = shape
-        # 3D, RGB
-        elif ndim == 4 and shape[3] in [3, 4]:
-            z, y, x, c = shape
-            self.is_RGB = True
-        # 3D, is multichannel
-        elif ndim == 4 and shape[0] < 5:
-            c, z, y, x = shape
-        else:
-            raise ValueError("Cannot interpret dimensions for a reader of "
-                             "shape {0}".format(shape))
+    if ndim == 2:
+        return ND_Wrapper_2D(frames)
+    elif ndim == 3 and colors is not None:
+        return ND_Wrapper_2D_color(frames)
+    elif ndim == 3 and shape[2] in [3, 4]:
+        return ND_Wrapper_2D_RGB(frames)
+    elif ndim == 3 and shape[0] < 5:  # guessing; could be small z-stack
+        return ND_Wrapper_2D_color(frames)
+    elif ndim == 3:
+        return ND_Wrapper_3D(frames)
+    elif ndim == 4 and colors is not None:
+        return ND_Wrapper_3D_color(frames)
+    elif ndim == 4 and shape[3] in [3, 4]:
+        return ND_Wrapper_3D_RGB(frames)
+    elif ndim == 4 and shape[0] < 5:
+        return ND_Wrapper_3D_color(frames)
+    else:
+        raise ValueError("Cannot interpret dimensions for a reader of "
+                         "shape {0}".format(shape))
 
-        self._init_axis('y', y)
-        self._init_axis('x', x)
-        self._init_axis('t', len(self._reader))
-        if z is not None:
-            self._init_axis('z', z)
-        if c is not None:
-            self._init_axis('c', c)
 
-    @reads_axes('yx')
-    def get_frame_2D(self, **ind):
-        # do some cacheing
-        if self._last_i != ind['t']:
-            self._last_i = ind['t']
-            self._last_frame = self._reader[ind['t']]
-        frame = self._last_frame
-
-        if 'z' in ind and 'c' in ind and self.is_RGB:
-            return frame[ind['z'], :, :, ind['c']]
-        elif 'z' in ind and 'c' in ind:
-            return frame[ind['c'], ind['z'], :, :]
-        elif 'z' in ind:
-            return frame[ind['z'], :, :]
-        elif 'c' in ind and self.is_RGB:
-            return frame[:, :, ind['c']]
-        elif 'c' in ind:
-            return frame[ind['c'], :, :]
-        else:
-            return frame
-
-    @reads_axes('yxc')
-    def get_frame_RGB(self, **ind):
-        # do some cacheing
-        if self._last_i != ind['t']:
-            self._last_i = ind['t']
-            self._last_frame = self._reader[ind['t']]
-        frame = self._last_frame
-
-        if 'z' in ind and 'c' in ind and self.is_RGB:
-            return frame[ind['z'], :, :, :]
-        elif 'z' in ind and 'c' in ind:
-            return frame[:, ind['z'], :, :].transpose([1, 2, 0])
-        elif 'z' in ind:
-            return frame[ind['z'], :, :]
-        elif 'c' in ind and self.is_RGB:
-            return frame[:, :, :]
-        elif 'c' in ind:
-            return frame[:, :, :].transpose([1, 2, 0])
-        else:
-            return frame
-
+class ND_Wrapper(FramesSequenceND):
     @property
     def pixel_type(self):
         return self._reader.pixel_type
 
     def __getattr__(self, attr):
         return self._reader.__getattr__(attr)
+
+
+class ND_Wrapper_2D(ND_Wrapper):
+    propagate_attrs = ['sizes', 'default_coords', 'bundle_axes', 'iter_axes']
+    def __init__(self, frames):
+        self._reader = frames
+        y, x = frames.frame_shape
+        self._init_axis('y', y)
+        self._init_axis('x', x)
+        self._init_axis('t', len(frames))
+
+    @reads_axes('yx')
+    def get_frame_2D(self, **ind):
+        return self._reader[ind['t']]
+
+
+class ND_Wrapper_2D_color(ND_Wrapper):
+    propagate_attrs = ['sizes', 'default_coords', 'bundle_axes', 'iter_axes']
+    def __init__(self, frames):
+        self._reader = frames
+        c, y, x = frames.frame_shape
+        self._init_axis('c', c)
+        self._init_axis('y', y)
+        self._init_axis('x', x)
+        self._init_axis('t', len(frames))
+
+    @reads_axes('cyx')
+    def get_frame_color(self, **ind):
+        return self._reader[ind['t']]
+
+
+class ND_Wrapper_2D_RGB(ND_Wrapper):
+    propagate_attrs = ['sizes', 'default_coords', 'bundle_axes', 'iter_axes']
+    def __init__(self, frames):
+        self._reader = frames
+        y, x, c = frames.frame_shape
+        self._init_axis('y', y)
+        self._init_axis('x', x)
+        self._init_axis('c', c)
+        self._init_axis('t', len(frames))
+
+    @reads_axes('yxc')
+    def get_frame_RGB(self, **ind):
+        return self._reader[ind['t']]
+
+
+class ND_Wrapper_3D(ND_Wrapper):
+    propagate_attrs = ['sizes', 'default_coords', 'bundle_axes', 'iter_axes']
+    def __init__(self, frames):
+        self._reader = frames
+        z, y, x = frames.frame_shape
+        self._init_axis('z', z)
+        self._init_axis('y', y)
+        self._init_axis('x', x)
+        self._init_axis('t', len(frames))
+
+    @reads_axes('zyx')
+    def get_frame_3D(self, **ind):
+        return self._reader[ind['t']]
+
+
+class ND_Wrapper_3D_color(ND_Wrapper):
+    propagate_attrs = ['sizes', 'default_coords', 'bundle_axes', 'iter_axes']
+    def __init__(self, frames):
+        self._reader = frames
+        c, z, y, x = frames.frame_shape
+        self._init_axis('c', c)
+        self._init_axis('z', z)
+        self._init_axis('y', y)
+        self._init_axis('x', x)
+        self._init_axis('t', len(frames))
+
+    @reads_axes('czyx')
+    def get_frame_3D_color(self, **ind):
+        return self._reader[ind['t']]
+
+
+class ND_Wrapper_3D_RGB(ND_Wrapper):
+    propagate_attrs = ['sizes', 'default_coords', 'bundle_axes', 'iter_axes']
+    def __init__(self, frames):
+        self._reader = frames
+        z, y, x, c = frames.frame_shape
+        self._init_axis('c', c)
+        self._init_axis('z', z)
+        self._init_axis('y', y)
+        self._init_axis('x', x)
+        self._init_axis('t', len(frames))
+
+    @reads_axes('zyxc')
+    def get_frame_3D_color(self, **ind):
+        return self._reader[ind['t']]

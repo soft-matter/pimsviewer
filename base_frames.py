@@ -70,7 +70,21 @@ def _bundle(get_frame, shape, names, dtype):
     return get_frame_bundled
 
 
-def _find_get_frame(result_axes, get_frame_dict, sizes, dtype):
+def _drop(get_frame, axes, names):
+    # sort axes in descending order for correct function of np.take
+    indices = np.argsort(axes)
+    axes = [axes[i] for i in reversed(indices)]
+    names = [names[i] for i in reversed(indices)]
+
+    def get_frame_dropped(self, **ind):
+        result = get_frame(self, **ind)
+        for (ax, name) in zip(axes, names):
+            result = np.take(result, ind[name], axis=ax)
+        return result
+    return get_frame_dropped
+
+
+def _make_get_frame(result_axes, get_frame_dict, sizes, dtype):
     if len(get_frame_dict) == 0:
         raise RuntimeError("No get_frame functions registered in this reader.")
     result_axes = tuple([a for a in result_axes])
@@ -103,6 +117,27 @@ def _find_get_frame(result_axes, get_frame_dict, sizes, dtype):
                             dtype)
         if not bundled_axes == list(result_axes):
             transposition = [bundled_axes.index(a) for a in result_axes]
+            return _transpose(get_frame, transposition)
+        else:
+            return get_frame
+
+    # list all that have too many axes, but do have all necessary ones
+    more = [gf for gf in get_frame_dict if result_axes_set.issubset(set(gf))]
+    if len(more) > 0:
+        # list superfluous axes for each method
+        to_drop = [set(gf) - result_axes_set for gf in more]
+        # count number of superfluous frames that will be read
+        n_drop = np.prod([[sizes[ax] for ax in dr] for dr in to_drop], 1)
+        # use the one with the lowest number of superfluous frames
+        i = int(np.argmin(n_drop))
+        get_frame_axes = more[i]
+        to_drop = list(to_drop[i])
+        to_drop_inds = [list(get_frame_axes).index(a) for a in to_drop]
+        result_axes_drop = [a for a in get_frame_axes if a in result_axes_set]
+        get_frame = _drop(get_frame_dict[get_frame_axes], to_drop_inds, to_drop)
+
+        if not result_axes_drop == list(result_axes):
+            transposition = [result_axes_drop.index(a) for a in result_axes]
             return _transpose(get_frame, transposition)
         else:
             return get_frame
@@ -175,7 +210,7 @@ class FramesSequenceND(FramesSequence):
         self._default_coords = {}
         self._iter_axes = []
         self._bundle_axes = ['y', 'x']
-        self._get_frame = None
+        self._gf_wrapped = None
 
     def _init_axis(self, name, size, default=0):
         # check if the axes have been initialized, if not, do it here
@@ -233,8 +268,8 @@ class FramesSequenceND(FramesSequence):
                 del self._iter_axes[self._iter_axes.index(k)]
 
         self._bundle_axes = list(value)
-        self._get_frame = _find_get_frame(self.bundle_axes, self.get_frame_dict,
-                                          self.sizes, self.pixel_type)
+        self._gf_wrapped = _make_get_frame(self.bundle_axes, self._gf_dict,
+                                           self.sizes, self.pixel_type)
 
     @property
     def iter_axes(self):
@@ -259,7 +294,7 @@ class FramesSequenceND(FramesSequence):
         self._iter_axes = list(value)
 
     @property
-    def get_frame_dict(self):
+    def _gf_dict(self):
         result = dict()
         for method in _iter_attr(self):
             if hasattr(method, '_axes'):
@@ -289,15 +324,14 @@ class FramesSequenceND(FramesSequence):
         value (see default_coords). """
         if i > len(self):
             raise IndexError('index out of range')
-        if self._get_frame is None:
-            self._get_frame = _find_get_frame(self.bundle_axes,
-                                              self.get_frame_dict,
-                                              self.sizes, self.pixel_type)
+        if self._gf_wrapped is None:
+            self._gf_wrapped = _make_get_frame(self.bundle_axes, self._gf_dict,
+                                               self.sizes, self.pixel_type)
 
         # start with the default coordinates
         coords = self._default_coords.copy()
 
-        # list sizes of iterate axes
+        # list sizes of iteration axes
         iter_sizes = [self._sizes[k] for k in self._iter_axes]
         # list how much i has to increase to get an increase of coordinate n
         iter_cumsizes = np.append(np.cumprod(iter_sizes[::-1])[-2::-1], 1)
@@ -305,7 +339,7 @@ class FramesSequenceND(FramesSequence):
         iter_coords = (i // iter_cumsizes) % iter_sizes
         coords.update(**{k: v for k, v in zip(self._iter_axes, iter_coords)})
 
-        result = self._get_frame(self, **coords)
+        result = self._gf_wrapped(self, **coords)
         result.frame_no = i
         return result
 
