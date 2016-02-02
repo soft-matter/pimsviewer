@@ -5,6 +5,7 @@ import six
 import numpy as np
 from abc import abstractmethod
 from warnings import warn
+from itertools import product
 
 from pims import Frame, FramesSequence
 
@@ -24,6 +25,91 @@ def _iter_attr(obj):
                 yield ns.__dict__[attr]
     except AttributeError:
         raise StopIteration  # obj has no __dict__
+
+
+def _transpose(get_frame, transposition):
+    def get_frame_T(self, **ind):
+        return get_frame(self, **ind).transpose(transposition)
+    return get_frame_T
+
+
+def _bundle(get_frame, shape, names, dtype):
+    iter_shape = shape[:len(names)]
+    def get_frame_bundled(self, **ind):
+        result = np.empty(shape, dtype=dtype)
+        md_list = []
+        for indices in product(*[range(s) for s in iter_shape]):
+            ind.update({n: i for n, i in zip(names, indices)})
+            frame = get_frame(self, **ind)
+            result[indices] = frame
+
+            if hasattr(frame, 'metadata'):
+                if frame.metadata is not None:
+                    md_list.append(frame.metadata)
+
+        # propagate metadata
+        if len(md_list) == np.prod(iter_shape):
+            metadata = dict()
+            keys = md_list[0].keys()
+            for k in keys:
+                try:
+                    metadata[k] = [row[k] for row in md_list]
+                except KeyError:
+                    # if a field is not present in every frame, ignore it
+                    warn('metadata field {} is not propagated')
+                else:
+                    # if all values are equal, only return one value
+                    if metadata[k][1:] == metadata[k][:-1]:
+                        metadata[k] = metadata[k][0]
+                    else:  # cast into ndarray
+                        metadata[k] = np.array(metadata[k])
+                        metadata[k].shape = iter_shape
+        else:
+            metadata = None
+        return Frame(result, metadata=metadata)
+    return get_frame_bundled
+
+
+def _find_get_frame(result_axes, get_frame_dict, sizes, dtype):
+    if len(get_frame_dict) == 0:
+        raise RuntimeError("No get_frame functions registered in this reader.")
+    result_axes = tuple([a for a in result_axes])
+
+    # search for methods that return the correct axes
+    if result_axes in get_frame_dict:
+        return get_frame_dict[result_axes]
+
+    # search for get_frame methods that return axes in different order
+    result_axes_set = set(result_axes)
+    for axes in get_frame_dict:
+        if len(set(axes) ^ result_axes_set) == 0:
+            transposition = [axes.index(a) for a in result_axes]
+            return _transpose(get_frame_dict[axes], transposition)
+
+    # list all get_frame that do not return too many axes
+    less = [gf for gf in get_frame_dict if len(set(gf) - result_axes_set) == 0]
+    if len(less) > 0:
+        # list missing axes for each method
+        to_iter = [result_axes_set - set(gf) for gf in less]
+        # count number of calls to get_frame necessary to build result
+        n_iter = np.prod([[sizes[ax] for ax in it] for it in to_iter], 1)
+        # use the one with the lowest number of iterations
+        i = int(np.argmin(n_iter))
+        get_frame_axes = less[i]
+        to_iter = list(to_iter[i])
+        bundled_axes = to_iter + list(get_frame_axes)
+        shape = [sizes[a] for a in bundled_axes]
+        get_frame = _bundle(get_frame_dict[get_frame_axes], shape, to_iter,
+                            dtype)
+        if not bundled_axes == list(result_axes):
+            transposition = [bundled_axes.index(a) for a in result_axes]
+            return _transpose(get_frame, transposition)
+        else:
+            return get_frame
+
+    # TODO: list all get_frame that do return too many axes
+    raise NotImplemented("Not all possible get_frame methods have been implemented")
+
 
 class FramesSequenceND(FramesSequence):
     """ A base class defining a FramesSequence with an arbitrary number of
@@ -84,12 +170,12 @@ class FramesSequenceND(FramesSequence):
     >>> frames.default_coords['m'] = 3
     >>> frames[5]  # returns Frame at T=5, M=3 with shape (2, 10, 64, 64)
     """
-    get_frame_dict = dict()
     def _clear_axes(self):
         self._sizes = {}
         self._default_coords = {}
         self._iter_axes = []
         self._bundle_axes = ['y', 'x']
+        self._get_frame = None
 
     def _init_axis(self, name, size, default=0):
         # check if the axes have been initialized, if not, do it here
@@ -147,6 +233,8 @@ class FramesSequenceND(FramesSequence):
                 del self._iter_axes[self._iter_axes.index(k)]
 
         self._bundle_axes = list(value)
+        self._get_frame = _find_get_frame(self.bundle_axes, self.get_frame_dict,
+                                          self.sizes, self.pixel_type)
 
     @property
     def iter_axes(self):
@@ -171,6 +259,14 @@ class FramesSequenceND(FramesSequence):
         self._iter_axes = list(value)
 
     @property
+    def get_frame_dict(self):
+        result = dict()
+        for method in _iter_attr(self):
+            if hasattr(method, '_axes'):
+                result[method._axes] = method
+        return result
+
+    @property
     def default_coords(self):
         """ When a axis is not present in both iter_axes and bundle_axes, the
         coordinate contained in this dictionary will be used. """
@@ -186,19 +282,6 @@ class FramesSequenceND(FramesSequence):
                              "coordinate")
         self._default_coords.update(**value)
 
-    @abstractmethod
-    def get_frame_2D(self, **ind):
-        """ The actual frame reader, defined by the subclassed reader.
-
-        This method should take exactly one keyword argument per axis,
-        reflecting the coordinate along each axis. It returns a two dimensional
-        ndarray with shape (sizes['y'], sizes['x']) and dtype `pixel_type`. It
-        may also return a Frame object, so that metadata will be propagated. It
-        will only propagate metadata if every bundled frame gives the same
-        fields.
-        """
-        pass
-
     def get_frame(self, i):
         """ Returns a Frame of shape determined by bundle_axes. The index value
         is interpreted according to the iter_axes property. Coordinates not
@@ -206,9 +289,10 @@ class FramesSequenceND(FramesSequence):
         value (see default_coords). """
         if i > len(self):
             raise IndexError('index out of range')
-        for method in _iter_attr(self):
-            if hasattr(method, '_axes'):
-                self.get_frame_dict[method._axes] = method.__name__
+        if self._get_frame is None:
+            self._get_frame = _find_get_frame(self.bundle_axes,
+                                              self.get_frame_dict,
+                                              self.sizes, self.pixel_type)
 
         # start with the default coordinates
         coords = self._default_coords.copy()
@@ -221,90 +305,9 @@ class FramesSequenceND(FramesSequence):
         iter_coords = (i // iter_cumsizes) % iter_sizes
         coords.update(**{k: v for k, v in zip(self._iter_axes, iter_coords)})
 
-        shape = self.frame_shape
-        # search for get_frame methods that return the correct axes
-        if tuple(self.bundle_axes) in self.get_frame_dict:
-            get_frame = getattr(self, self.get_frame_dict[tuple(self.bundle_axes)])
-            transpose = None
-        else:
-            bundle_axes_set = set(self.bundle_axes)
-            # search for get_frame methods that return axes in different order
-            for method_axes in self.get_frame_dict:
-                if len(set(method_axes) ^ bundle_axes_set) == 0:
-                    get_frame = getattr(self, self.get_frame_dict[method_axes])
-                    transpose = [method_axes.index(b) for b in self.bundle_axes]
-                    break
-            # list all get_frame that do not return too many axes
-            methods = [g for g in self.get_frame_dict if len(set(g) - bundle_axes_set) == 0]
-
-            # search for get_frame methods that return axes in different order
-            for method_axes in self.get_frame_dict:
-                if len(set(method_axes) ^ set(self.bundle_axes)) == 0:
-                    get_frame = getattr(self, self.get_frame_dict[method_axes])
-                    transpose = [method_axes.index(b) for b in self.bundle_axes]
-                    break
-
-            result = get_frame(**coords)
-            if hasattr(result, 'metadata'):
-                metadata = result.metadata
-            else:
-                metadata = None
-            result = result.transpose([method_axes.index(b) for b in self.bundle_axes])
-
-        for method_axes in self.get_frame_dict:
-            # search for get_frame methods with same axes
-            if len(set(method_axes) ^ set(self.bundle_axes)) == 0:
-                get_frame = getattr(self, self.get_frame_dict[method_axes])
-                result = get_frame(**coords)
-                if hasattr(result, 'metadata'):
-                    metadata = result.metadata
-                else:
-                    metadata = None
-                result = result.transpose([method_axes.index(b) for b in self.bundle_axes])
-                break
-        else:  # general case of N dimensional frame
-            Nframes = int(np.prod(shape[:-2]))
-            result = np.empty([Nframes] + list(shape[-2:]),
-                              dtype=self.pixel_type)
-
-            # zero out all coords that will be bundled
-            coords.update(**{k: 0 for k in self._bundle_axes[:-2]})
-            # read all 2D frames and properly iterate through the coordinates
-            mdlist = [{}] * Nframes
-            for n in range(Nframes):
-                frame = self.get_frame_2D(**coords)
-                result[n] = frame
-                if hasattr(frame, 'metadata'):
-                    mdlist[n] = frame.metadata
-                for dim in self._bundle_axes[-3::-1]:
-                    coords[dim] += 1
-                    if coords[dim] >= self._sizes[dim]:
-                        coords[dim] = 0
-                    else:
-                        break
-            # reshape the array into the desired shape
-            result.shape = shape
-
-
-            # propagate metadata
-            metadata = {}
-            if not np.all([md == {} for md in mdlist]):
-                keys = mdlist[0].keys()
-                for k in keys:
-                    try:
-                        metadata[k] = [row[k] for row in mdlist]
-                    except KeyError:
-                        # if a field is not present in every frame, ignore it
-                        warn('metadata field {} is not propagated')
-                    else:
-                        # if all values are equal, only return one value
-                        if metadata[k][1:] == metadata[k][:-1]:
-                            metadata[k] = metadata[k][0]
-                        else:  # cast into ndarray
-                            metadata[k] = np.array(metadata[k])
-                            metadata[k].shape = shape[:-2]
-
-        return Frame(result, frame_no=i, metadata=metadata)
+        result = self._get_frame(self, **coords)
+        result.frame_no = i
+        return result
 
     def __repr__(self):
         s = "<FramesSequenceND>\nAxes: {0}\n".format(self.ndim)

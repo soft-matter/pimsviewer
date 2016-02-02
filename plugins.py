@@ -147,7 +147,7 @@ class ViewerPlotting(Plugin):
         self.ax = viewer.renderer.ax
         self.canvas = viewer.renderer.widget
 
-        self.viewer.original_image_changed.connect(self.process)
+        self.viewer.image_changed.connect(self.process)
 
         self.process()
 
@@ -180,7 +180,7 @@ class ViewerAnnotate(Plugin):
         self.ax = viewer.renderer.ax
         self.canvas = viewer.renderer.widget
 
-        self.viewer.original_image_changed.connect(self.process)
+        self.viewer.image_changed.connect(self.process)
 
         self.process()
 
