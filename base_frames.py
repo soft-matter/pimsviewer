@@ -2,6 +2,8 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import six
+from types import MethodType
+
 import numpy as np
 from abc import abstractmethod
 from warnings import warn
@@ -27,26 +29,31 @@ def _iter_attr(obj):
         raise StopIteration  # obj has no __dict__
 
 
-def _transpose(get_frame, transposition):
-    def get_frame_T(self, **ind):
-        return get_frame(self, **ind).transpose(transposition)
-    return get_frame_T
+def _transpose(get_frame, expected_axes, desired_axes):
+    if list(expected_axes) == list(desired_axes):
+        return get_frame
+    else:
+        transposition = [expected_axes.index(a) for a in desired_axes]
+        def get_frame_T(obj, **ind):
+            return get_frame(obj, **ind).transpose(transposition)
+        return get_frame_T
 
 
-def _bundle(get_frame, shape, names, dtype):
-    iter_shape = shape[:len(names)]
-    def get_frame_bundled(self, **ind):
+def _bundle(get_frame, expected_axes, to_iter, sizes, dtype):
+    bundled_axes = to_iter + expected_axes
+    shape = [sizes[a] for a in bundled_axes]
+    iter_shape = shape[:len(to_iter)]
+    def get_frame_bundled(obj, **ind):
         result = np.empty(shape, dtype=dtype)
         md_list = []
         for indices in product(*[range(s) for s in iter_shape]):
-            ind.update({n: i for n, i in zip(names, indices)})
-            frame = get_frame(self, **ind)
+            ind.update({n: i for n, i in zip(to_iter, indices)})
+            frame = get_frame(obj, **ind)
             result[indices] = frame
 
             if hasattr(frame, 'metadata'):
                 if frame.metadata is not None:
                     md_list.append(frame.metadata)
-
         # propagate metadata
         if len(md_list) == np.prod(iter_shape):
             metadata = dict()
@@ -67,83 +74,78 @@ def _bundle(get_frame, shape, names, dtype):
         else:
             metadata = None
         return Frame(result, metadata=metadata)
-    return get_frame_bundled
+    return get_frame_bundled, bundled_axes
 
 
-def _drop(get_frame, axes, names):
+def _drop(get_frame, expected_axes, to_drop):
     # sort axes in descending order for correct function of np.take
-    indices = np.argsort(axes)
-    axes = [axes[i] for i in reversed(indices)]
-    names = [names[i] for i in reversed(indices)]
+    to_drop_inds = [list(expected_axes).index(a) for a in to_drop]
+    indices = np.argsort(to_drop_inds)
+    axes = [to_drop_inds[i] for i in reversed(indices)]
+    to_drop = [to_drop[i] for i in reversed(indices)]
+    result_axes = [a for a in expected_axes if a not in to_drop]
 
-    def get_frame_dropped(self, **ind):
-        result = get_frame(self, **ind)
-        for (ax, name) in zip(axes, names):
+    def get_frame_dropped(obj, **ind):
+        result = get_frame(obj, **ind)
+        for (ax, name) in zip(axes, to_drop):
             result = np.take(result, ind[name], axis=ax)
         return result
-    return get_frame_dropped
+    return get_frame_dropped, result_axes
 
 
 def _make_get_frame(result_axes, get_frame_dict, sizes, dtype):
-    if len(get_frame_dict) == 0:
-        raise RuntimeError("No get_frame functions registered in this reader.")
-    result_axes = tuple([a for a in result_axes])
-
-    # search for methods that return the correct axes
-    if result_axes in get_frame_dict:
-        return get_frame_dict[result_axes]
-
-    # search for get_frame methods that return axes in different order
+    methods = list(get_frame_dict.keys())
+    result_axes = [a for a in result_axes]
     result_axes_set = set(result_axes)
-    for axes in get_frame_dict:
+
+    # search for get_frame methods that return the right axes
+    for axes in methods:
         if len(set(axes) ^ result_axes_set) == 0:
-            transposition = [axes.index(a) for a in result_axes]
-            return _transpose(get_frame_dict[axes], transposition)
+            # _transpose does nothing when axes == result_axes
+            return _transpose(get_frame_dict[axes], axes, result_axes)
 
-    # list all get_frame that do not return too many axes
-    less = [gf for gf in get_frame_dict if len(set(gf) - result_axes_set) == 0]
-    if len(less) > 0:
-        # list missing axes for each method
-        to_iter = [result_axes_set - set(gf) for gf in less]
-        # count number of calls to get_frame necessary to build result
-        n_iter = np.prod([[sizes[ax] for ax in it] for it in to_iter], 1)
-        # use the one with the lowest number of iterations
-        i = int(np.argmin(n_iter))
-        get_frame_axes = less[i]
-        to_iter = list(to_iter[i])
-        bundled_axes = to_iter + list(get_frame_axes)
-        shape = [sizes[a] for a in bundled_axes]
-        get_frame = _bundle(get_frame_dict[get_frame_axes], shape, to_iter,
-                            dtype)
-        if not bundled_axes == list(result_axes):
-            transposition = [bundled_axes.index(a) for a in result_axes]
-            return _transpose(get_frame, transposition)
-        else:
-            return get_frame
+    # we need either to drop axes or to iterate over axes:
+    # collect some numbers to decide what to do
+    arr = [None] * len(methods)
+    for i, method in enumerate(methods):
+        axes_set = set(method)
+        to_iter = list(result_axes_set - axes_set)
+        n_iter = int(np.prod([sizes[ax] for ax in to_iter]))
+        to_drop = list(axes_set - result_axes_set)
+        n_drop = int(np.prod([sizes[ax] for ax in to_drop]))
+        arr[i] = [method, axes_set, to_iter, n_iter, to_drop, n_drop]
 
-    # list all that have too many axes, but do have all necessary ones
-    more = [gf for gf in get_frame_dict if result_axes_set.issubset(set(gf))]
-    if len(more) > 0:
-        # list superfluous axes for each method
-        to_drop = [set(gf) - result_axes_set for gf in more]
-        # count number of superfluous frames that will be read
-        n_drop = np.prod([[sizes[ax] for ax in dr] for dr in to_drop], 1)
-        # use the one with the lowest number of superfluous frames
-        i = int(np.argmin(n_drop))
-        get_frame_axes = more[i]
-        to_drop = list(to_drop[i])
-        to_drop_inds = [list(get_frame_axes).index(a) for a in to_drop]
-        result_axes_drop = [a for a in get_frame_axes if a in result_axes_set]
-        get_frame = _drop(get_frame_dict[get_frame_axes], to_drop_inds, to_drop)
+    # try to read as less data as possible: try n_drop == 0
+    # sort in increasing number of iterations
+    arr.sort(key=lambda x: x[3])
+    for method, axes_set, to_iter, n_iter, to_drop, n_drop in arr:
+        if n_drop > 0:
+            continue
+        bundled_axes = to_iter + list(method)
+        get_frame, after_bundle = _bundle(get_frame_dict[method], method,
+                                          to_iter, sizes, dtype)
+        return _transpose(get_frame, bundled_axes, result_axes)
 
-        if not result_axes_drop == list(result_axes):
-            transposition = [result_axes_drop.index(a) for a in result_axes]
-            return _transpose(get_frame, transposition)
-        else:
-            return get_frame
+    # try to iterate without dropping axes
+    # sort in increasing number of dropped frames
+    # TODO: sometimes dropping some data is better than having many iterations
+    arr.sort(key=lambda x: x[5])
+    for method, axes_set, to_iter, n_iter, to_drop, n_drop in arr:
+        if n_iter > 0:
+            continue
+        get_frame, after_drop = _drop(get_frame_dict[method], method, to_drop)
+        return _transpose(get_frame, after_drop, result_axes)
 
-    # TODO: list all get_frame that do return too many axes
-    raise NotImplemented("Not all possible get_frame methods have been implemented")
+    # worst case: all methods have both too many axes and require iteration
+    # take lowest number of dropped frames
+    # if indecisive, take lowest number of iterations
+    arr.sort(key=lambda x: (x[3], x[5]))
+    method, axes_set, to_iter, n_iter, to_drop, n_drop = arr[0]
+
+    get_frame, after_drop = _drop(get_frame_dict[method], method, to_drop)
+    get_frame, after_bundle = _bundle(get_frame, after_drop, to_iter,
+                                      sizes, dtype)
+    return _transpose(get_frame, after_bundle, result_axes)
 
 
 class FramesSequenceND(FramesSequence):
@@ -156,12 +158,13 @@ class FramesSequenceND(FramesSequence):
     to which coordinates each index points. See below for a description of
     each attribute.
 
-    Subclassed readers only need to define `get_frame_2D`, `pixel_type` and
-    `__init__`. In the `__init__`, at least axes y and x need to be
-    initialized using `_init_axis(name, size)`.
+    Subclassed readers only need to define `pixel_type` and `__init__`. At least
+    one reader method needs to be wrapped with `@reads_axes(<list of axes>)`.
+    In the `__init__`, axes need to be initialized using `_init_axis(name, size)`.
+    It is recommended to set default values to `bundle_axes` and `iter_axes`.
 
-    The attributes `__len__`, `frame_shape`, and `get_frame` are defined by
-    this base_class; these are not meant to be changed.
+    The attributes `__len__`, `get_frame`, and the attributes below are defined
+    by this base_class; these should not be changed by derived classes.
 
     Attributes
     ----------
@@ -175,14 +178,14 @@ class FramesSequenceND(FramesSequence):
         Shape of frames that will be returned by get_frame
     iter_axes : iterable of strings
         This determines which axes will be iterated over by the FramesSequence.
-        The last element in will iterate fastest. x and y are not allowed.
+        The last element in will iterate fastest. Default 't'
     bundle_axes : iterable of strings
         This determines which axes will be bundled into one Frame. The axes in
         the ndarray that is returned by get_frame have the same order as the
-        order in this list. The last two elements have to be ['y', 'x'].
+        order in this list. Default ['y', 'x'].
     default_coords: dict of int
         When an axis is not present in both iter_axes and bundle_axes, the
-        coordinate contained in this dictionary will be used.
+        coordinate contained in this dictionary will be used. Default 0 for each.
 
     Examples
     --------
@@ -195,6 +198,10 @@ class FramesSequenceND(FramesSequence):
     ...        self._init_axis('x', shape[1])
     ...        for name in axes:
     ...            self._init_axis(name, axes[name])
+    ...        self.bundle_axes = 'yx'  # set default value
+    ...        if 't' in axes:
+    ...            self.iter_axes = 't'  # set default value
+    ...    @reads_axes('yx')
     ...    def get_frame_2D(self, **ind):
     ...        return np.zeros((self.sizes['y'], self.sizes['x']),
     ...                        dtype=self.pixel_type)
@@ -209,8 +216,8 @@ class FramesSequenceND(FramesSequence):
         self._sizes = {}
         self._default_coords = {}
         self._iter_axes = []
-        self._bundle_axes = ['y', 'x']
-        self._gf_wrapped = None
+        self._bundle_axes = []
+        self._get_frame_wrapped = None
 
     def _init_axis(self, name, size, default=0):
         # check if the axes have been initialized, if not, do it here
@@ -219,8 +226,7 @@ class FramesSequenceND(FramesSequence):
         elif name in self._sizes:
             raise ValueError("axis '{}' already exists".format(name))
         self._sizes[name] = int(size)
-        if not (name == 'x' or name == 'y'):
-            self.default_coords[name] = int(default)
+        self.default_coords[name] = int(default)
 
     def __len__(self):
         return int(np.prod([self._sizes[d] for d in self._iter_axes]))
@@ -250,56 +256,60 @@ class FramesSequenceND(FramesSequence):
         """ This determines which axes will be bundled into one Frame.
         The ndarray that is returned by get_frame has the same axis order
         as the order of `bundle_axes`.
-        The last two elements have to be ['y', 'x'].
         """
         return self._bundle_axes
 
     @bundle_axes.setter
     def bundle_axes(self, value):
+        value = list(value)
         invalid = [k for k in value if k not in self._sizes]
         if invalid:
             raise ValueError("axes %r do not exist" % invalid)
-
-        if 'x' not in value or 'y' not in value:
-            raise ValueError("bundle_axes should contain ['y', 'x']")
 
         for k in value:
             if k in self._iter_axes:
                 del self._iter_axes[self._iter_axes.index(k)]
 
-        self._bundle_axes = list(value)
-        self._gf_wrapped = _make_get_frame(self.bundle_axes, self._gf_dict,
-                                           self.sizes, self.pixel_type)
+        self._bundle_axes = value
+
+        # list all get_frame methods attached to this reader
+        get_frame_dict = dict()
+        for method in _iter_attr(self):
+            if hasattr(method, '_axes'):
+                get_frame_dict[method._axes] = method
+        if len(get_frame_dict) == 0:
+            if hasattr(self, 'get_frame_2D'):
+                # patch up get_frame_2D for backwards compatibility
+                def _get_frame(obj, **ind):
+                    return self.get_frame_2D(**ind)
+                get_frame_dict[('y', 'x')] = _get_frame
+            else:
+                raise RuntimeError('No reader methods found. Wrap a method ' +
+                                   'with `@reads_axes("yx")`')
+
+        # update the get_frame method
+        get_frame = _make_get_frame(self._bundle_axes, get_frame_dict,
+                                    self.sizes, self.pixel_type)
+        self._get_frame_wrapped = MethodType(get_frame, self)
 
     @property
     def iter_axes(self):
         """ This determines which axes will be iterated over by the
-        FramesSequence. The last element will iterate fastest.
-        x and y are not allowed. """
+        FramesSequence. The last element will iterate fastest. """
         return self._iter_axes
 
     @iter_axes.setter
     def iter_axes(self, value):
+        value = list(value)
         invalid = [k for k in value if k not in self._sizes]
         if invalid:
             raise ValueError("axes %r do not exist" % invalid)
-
-        if 'x' in value or 'y' in value:
-            raise ValueError("axes 'y' and 'x' cannot be iterated")
 
         for k in value:
             if k in self._bundle_axes:
                 del self._bundle_axes[self._bundle_axes.index(k)]
 
-        self._iter_axes = list(value)
-
-    @property
-    def _gf_dict(self):
-        result = dict()
-        for method in _iter_attr(self):
-            if hasattr(method, '_axes'):
-                result[method._axes] = method
-        return result
+        self._iter_axes = value
 
     @property
     def default_coords(self):
@@ -312,9 +322,6 @@ class FramesSequenceND(FramesSequence):
         invalid = [k for k in value if k not in self._sizes]
         if invalid:
             raise ValueError("axes %r do not exist" % invalid)
-        if 'x' in value or 'y' in value:
-            raise ValueError("axes 'y' and 'x' cannot have a default "
-                             "coordinate")
         self._default_coords.update(**value)
 
     def get_frame(self, i):
@@ -324,9 +331,8 @@ class FramesSequenceND(FramesSequence):
         value (see default_coords). """
         if i > len(self):
             raise IndexError('index out of range')
-        if self._gf_wrapped is None:
-            self._gf_wrapped = _make_get_frame(self.bundle_axes, self._gf_dict,
-                                               self.sizes, self.pixel_type)
+        if self._get_frame_wrapped is None:
+            self.bundle_axes = tuple(self.bundle_axes)  # kick bundle_axes
 
         # start with the default coordinates
         coords = self._default_coords.copy()
@@ -339,9 +345,12 @@ class FramesSequenceND(FramesSequence):
         iter_coords = (i // iter_cumsizes) % iter_sizes
         coords.update(**{k: v for k, v in zip(self._iter_axes, iter_coords)})
 
-        result = self._gf_wrapped(self, **coords)
-        result.frame_no = i
-        return result
+        result = self._get_frame_wrapped(**coords)
+        if hasattr(result, 'metadata'):
+            metadata = result.metadata
+        else:
+            metadata = None
+        return Frame(result, frame_no=i, metadata=metadata)
 
     def __repr__(self):
         s = "<FramesSequenceND>\nAxes: {0}\n".format(self.ndim)
