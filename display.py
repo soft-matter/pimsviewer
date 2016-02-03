@@ -5,13 +5,8 @@ from six import with_metaclass
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 import numpy as np
-from pimsviewer.qt import QtGui, QtCore, QtWidgets, FigureCanvasQTAgg
-
-try:
-    from qimage2ndarray import array2qimage
-    has_qimage2ndarray = True
-except:
-    has_qimage2ndarray = False
+from pimsviewer.qt import (QtGui, QtCore, QtWidgets, FigureCanvasQTAgg,
+                           rgb_view, has_qimage2ndarray)
 
 try:
     import matplotlib as mpl
@@ -114,7 +109,7 @@ class DisplayMPL(Display):
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
 
     def redraw(self):
-        self.canvas.draw_idle()
+        self.canvas.draw()
 
     def update_image(self, image):
         self._image_plot.set_array(image)

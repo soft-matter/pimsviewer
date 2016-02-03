@@ -5,16 +5,24 @@ import six
 import os
 from functools import partial
 from itertools import chain
+import warnings
 
 import numpy as np
-from pims import FramesSequence, FramesSequenceND
+from pims import FramesSequence, FramesSequenceND, Frame
 
 from pimsviewer.widgets import (CheckBox, DockWidget, VideoTimer, Slider)
 from pimsviewer.qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
-                           init_qtapp, start_qtapp)
+                           init_qtapp, start_qtapp, rgb_view)
 from pimsviewer.display import Display, DisplayMPL
 from pimsviewer.utils import (wrap_frames_sequence, recursive_subclasses,
                               to_rgb_uint8)
+
+try:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from moviepy.editor import VideoClip
+except ImportError:
+    VideoClip = None
 
 
 class Viewer(QtWidgets.QMainWindow):
@@ -64,9 +72,11 @@ class Viewer(QtWidgets.QMainWindow):
                                      partial(self.open_file, reader_cls=cls))
 
         self.file_menu = QtWidgets.QMenu('&File', self)
-        self.file_menu.addAction('Open file', self.open_file,
+        self.file_menu.addAction('Open', self.open_file,
                                  Qt.CTRL + Qt.Key_O)
         self.file_menu.addMenu(open_with_menu)
+        self.file_menu.addAction('Save', self.save_file,
+                                 Qt.CTRL + Qt.Key_S)
         self.file_menu.addAction('Copy', self.to_clipboard,
                                  Qt.CTRL + Qt.Key_C)
         self.file_menu.addAction('Quit', self.close,
@@ -442,11 +452,58 @@ class Viewer(QtWidgets.QMainWindow):
                 new_z = self.reader.sizes['z'] - 1
             self.set_index(new_z, 'z')
 
-    def to_clipboard(self):
+    def to_pixmap(self):
         pixmap = QtWidgets.QPixmap(self.renderer.widget.size())
         self.renderer.widget.render(pixmap)
+        return pixmap
+
+    def to_clipboard(self):
         clipboard = QtWidgets.QApplication.clipboard()
-        clipboard.setPixmap(pixmap)
+        clipboard.setPixmap(self.to_pixmap())
+
+    def to_frame(self):
+        return Frame(rgb_view(self.to_pixmap().toImage()),
+                     frame_no=self.index['t'])
+
+    def save_file(self, filename=None):
+        if VideoClip is None:
+            raise ImportError('The MoviePy exporter requires moviepy to work.')
+
+        if filename is None:
+            try:
+                cur_dir = os.path.dirname(self.reader.filename)
+            except AttributeError:
+                cur_dir = ''
+            filename = QtGui.QFileDialog.getSaveFileName(directory=cur_dir)
+            if isinstance(filename, tuple):
+                # Handle discrepancy between PyQt4 and PySide APIs.
+                filename = filename[0]
+
+        _, ext = os.path.splitext(os.path.basename(filename))
+        ext = ext[1:].lower()
+        if ext == 'wmv':
+            codec = 'wmv'
+        else:
+            codec = None  # let moviepy decide
+        if ext == '':
+            filename += '.mp4'
+
+        length = self.reader.sizes['t']
+        try:
+            rate = self.reader.frame_rate
+        except AttributeError:
+            rate = 25
+
+        def _export_func(t):
+            self.set_index(int(round(t*rate)))
+            return self.to_frame()
+
+        clip = VideoClip(_export_func)
+        clip.duration = (length - 1) / rate
+
+        self.status = 'Saving to {}'.format(filename)
+        clip.write_videofile(filename, rate, codec=codec, audio=False)
+        self.status = 'Done saving {}'.format(filename)
 
 
 class Plugin(QtWidgets.QDialog):
