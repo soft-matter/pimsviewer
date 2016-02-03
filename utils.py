@@ -105,6 +105,7 @@ def wrap_frames_sequence(frames):
 
 
 class ND_Wrapper(FramesSequenceND):
+    no_reader = True
     @property
     def pixel_type(self):
         return self._reader.pixel_type

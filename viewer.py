@@ -58,6 +58,8 @@ class Viewer(QtWidgets.QMainWindow):
         open_with_menu = QtWidgets.QMenu('Open with', self)
         for cls in set(chain(recursive_subclasses(FramesSequence),
                              recursive_subclasses(FramesSequenceND))):
+            if hasattr(cls, 'no_reader'):
+                continue
             open_with_menu.addAction(cls.__name__,
                                      partial(self.open_file, reader_cls=cls))
 
@@ -65,6 +67,8 @@ class Viewer(QtWidgets.QMainWindow):
         self.file_menu.addAction('Open file', self.open_file,
                                  Qt.CTRL + Qt.Key_O)
         self.file_menu.addMenu(open_with_menu)
+        self.file_menu.addAction('Copy', self.to_clipboard,
+                                 Qt.CTRL + Qt.Key_C)
         self.file_menu.addAction('Quit', self.close,
                                  Qt.CTRL + Qt.Key_Q)
         self.menuBar().addMenu(self.file_menu)
@@ -437,6 +441,12 @@ class Viewer(QtWidgets.QMainWindow):
             if new_z >= self.reader.sizes['z'] - 1:
                 new_z = self.reader.sizes['z'] - 1
             self.set_index(new_z, 'z')
+
+    def to_clipboard(self):
+        pixmap = QtWidgets.QPixmap(self.renderer.widget.size())
+        self.renderer.widget.render(pixmap)
+        clipboard = QtWidgets.QApplication.clipboard()
+        clipboard.setPixmap(pixmap)
 
 
 class Plugin(QtWidgets.QDialog):
