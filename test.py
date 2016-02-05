@@ -111,9 +111,10 @@ class TestViewer(unittest.TestCase):
         viewer.show()
 
     def test_viewer_annotate(self):
-        f = pd.DataFrame(np.random.random((100, 2)) * 128, columns=['x', 'y'])
+        f = pd.DataFrame(np.random.random((100, 2)) * 100 + 10, columns=['x', 'y'])
         f['frame'] = np.repeat(np.arange(10), 10)
-        (Viewer(RandomReader()) + AnnotatePlugin(f)).show()
+        f['particle'] = np.tile(np.arange(10), 10)
+        (Viewer(RandomReader(shape=(128, 128))) + AnnotatePlugin(f)).show()
 
 
 if __name__ == '__main__':

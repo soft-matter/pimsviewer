@@ -175,8 +175,8 @@ class AnnotatePlugin(Plugin):
         self.features = features
         self._selected = None
         self.dragging = False
-        self.last_event = None
-        self.select_event = None
+        self._no_pick = None
+        self._no_click = None
         if 'hide' not in self.features:
             self.features['hide'] = False
 
@@ -258,9 +258,9 @@ class AnnotatePlugin(Plugin):
         self._out.text = msg
 
     def on_pick(self, event):
-        if event.mouseevent is self.last_event:
-            self.last_event = None
+        if event.mouseevent is self._no_pick:
             return
+        self._no_click = event.mouseevent  # no click events
         index = self.indices[event.ind[0]]
         button = event.mouseevent.button
         dblclick = event.mouseevent.dblclick
@@ -269,42 +269,43 @@ class AnnotatePlugin(Plugin):
                 self.selected = index
             else:
                 self.selected = None
-            self.select_event = event.mouseevent
+            self._no_click = event.mouseevent
             self.process()
-        if button == 2 and not dblclick:  # middle mouse on selected: drag
+        elif button == 2 and not dblclick:  # middle mouse on selected: drag
             if self.selected is not None:
                 self.dragging = True
         elif button == 3 and not dblclick:  # right mouse: hide
             self.selected = None
             self.features.loc[index, 'hide'] = not self.features.loc[index, 'hide']
             self.process()
-        elif button == 3 and dblclick and 'particle' in self.features:  # right mouse double: hide track
-            particle_id = self.features.loc[index, 'particle']
-            was_hidden = self.features.loc[index, 'hide']
-            if was_hidden:
-                self.features.loc[self.features['particle'] == particle_id,
-                                  'hide'] = False
-            else:
-                self.features.loc[self.features['particle'] == particle_id,
-                                  'hide'] = True
-            self.process()
+        elif button == 3 and dblclick:  # right mouse double: hide track
+            if 'particle' in self.features:
+                particle_id = self.features.loc[index, 'particle']
+                was_hidden = not self.features.loc[index, 'hide']
+                if was_hidden:
+                    self.features.loc[self.features['particle'] == particle_id,
+                                      'hide'] = False
+                else:
+                    self.features.loc[self.features['particle'] == particle_id,
+                                      'hide'] = True
+                self.process()
 
     def on_press(self, event):
-        if event.inaxes != self.ax:
+        if (event.inaxes != self.ax) or (event is self._no_click):
             return
-        if (event.button == 1) and (self.selected is not None) and (event is not self.select_event) and not event.dblclick:
-            self.selected = None
-            self.select_event = None
-            self.process()
-        if event.button == 3 and event.dblclick:
-            self.last_event = event
+        if event.button == 1 and not event.dblclick:
+            if self.selected is not None:
+                self.selected = None
+                self.process()
+        elif event.button == 3 and event.dblclick:
             new_index = df_add_row(self.features)
             self.features.loc[new_index, ['x', 'y']] = event.xdata, event.ydata
             self.features.loc[new_index, 'frame'] = self.viewer.index['t']
             self.process()
 
     def on_release(self, event):
-        if (not self.dragging) or (event.inaxes != self.ax) or (self.selected is None):
+        if ((not self.dragging) or (event.inaxes != self.ax)
+            or (self.selected is None) or (event is self._no_click)):
             return
         self.dragging = False
         if event.button == 2:
@@ -314,4 +315,3 @@ class AnnotatePlugin(Plugin):
             if 'particle' in self.features:
                 self.features.loc[self.selected, 'particle'] = -1
             self.process()
-
