@@ -92,8 +92,8 @@ class Viewer(QtWidgets.QMainWindow):
         self.menuBar().addMenu(self.view_menu)
 
         self.pipeline_menu = QtWidgets.QMenu('&Pipelines', self)
-        from pimsviewer.plugins import ViewerPipeline
-        for pipeline_obj in ViewerPipeline.instances:
+        from pimsviewer.plugins import PipelinePlugin
+        for pipeline_obj in PipelinePlugin.instances:
             self.pipeline_menu.addAction(pipeline_obj.name,
                                          partial(self.add_plugin,
                                                  pipeline_obj))

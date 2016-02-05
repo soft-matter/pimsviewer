@@ -5,7 +5,7 @@ except ImportError:
 
 if has_qt:
     from .viewer import Viewer, Plugin
-    from .plugins import ViewerPipeline, ViewerPlotting, ViewerAnnotate
+    from .plugins import PipelinePlugin, PlottingPlugin, AnnotatePlugin
     from .widgets import CheckBox, Text, ComboBox, Slider, Button
 else:
     def viewer_not_available(*args, **kwargs):

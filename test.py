@@ -8,7 +8,7 @@ import unittest
 import nose
 import numpy as np
 from numpy.testing import (assert_equal, assert_almost_equal, assert_allclose)
-from pimsviewer import Viewer, ViewerPipeline, Slider, ViewerAnnotate
+from pimsviewer import Viewer, Slider, PipelinePlugin, AnnotatePlugin, PlottingPlugin
 from pims import FramesSequence, FramesSequenceND, Frame, pipeline
 import pandas as pd
 
@@ -43,16 +43,36 @@ class RandomReader(FramesSequence):
 def add_noise(img, noise_level):
     return img + (np.random.random(img.shape) * noise_level).astype(img.dtype)
 
-AddNoise = ViewerPipeline(add_noise, 'Add noise', dock='right') + \
-           Slider('noise_level', 0, 100, 0, orientation='vertical')
+
+def tp_locate(image, radius, minmass, separation, noise_size, ax):
+    _plot_style = dict(markersize=15, markeredgewidth=2,
+                       markerfacecolor='none', markeredgecolor='r',
+                       marker='o', linestyle='none')
+    from trackpy import locate
+    f = locate(image, radius * 2 + 1, minmass, None, separation, noise_size)
+    if len(f) == 0:
+        return None
+    else:
+        return ax.plot(f['x'], f['y'], **_plot_style)
 
 @pipeline
 def no_red(img, level):
     img[:, :, 0] = level
     return img
 
-NoRed = ViewerPipeline(no_red, 'No red', dock='left') + \
-                       Slider('level', 0, 100, 0, orientation='vertical')
+
+def convert_to_grey(img, r, g, b):
+    color_axis = img.shape.index(3)
+    img = np.rollaxis(img, color_axis, 3)
+    grey = (img * [r, g, b]).sum(2)
+    return grey.astype(img.dtype)  # coerce to original dtype
+
+
+# TODO: this does not work because it changes the image shape
+# RGBToGrey = ViewerPipeline(convert_to_grey, 'RGB to Grey', dock='right') + \
+#             Slider('r', 0, 1, 0.2125, orientation='vertical') + \
+#             Slider('g', 0, 1, 0.7154, orientation='vertical') + \
+#             Slider('b', 0, 1, 0.0721, orientation='vertical')
 
 class TestViewer(unittest.TestCase):
     def test_viewer_noreader(self):
@@ -68,55 +88,33 @@ class TestViewer(unittest.TestCase):
         viewer.show()
 
     def test_viewer_pipeline(self):
+        AddNoise = PipelinePlugin(add_noise, 'Add noise', dock='right') + \
+           Slider('noise_level', 0, 100, 0, orientation='vertical')
         viewer = Viewer(RandomReader()) + AddNoise
         viewer.show()
+    #
+    # def test_viewer_pipeline_multiple(self):
+    #     AddNoise = PipelinePlugin(add_noise, 'Add noise', dock='right') + \
+    #        Slider('noise_level', 0, 100, 0, orientation='vertical')
+    #     NoRed = PipelinePlugin(no_red, 'No red', dock='left') + \
+    #                    Slider('level', 0, 100, 0, orientation='vertical')
+    #     viewer = Viewer(RandomReader(shape=(128, 128, 3))) + AddNoise + NoRed
+    #     viewer.show()
 
-    def test_viewer_pipeline_multiple(self):
-        viewer = Viewer(RandomReader(shape=(128, 128, 3))) + AddNoise + NoRed
+    def test_viewer_interactive_plotting(self):
+        Locate = PlottingPlugin(tp_locate, 'Locate', dock='right') + \
+           Slider('radius', 1, 20, 7, value_type='int', orientation='vertical') + \
+           Slider('separation', 1, 20, 7, value_type='float', orientation='vertical') + \
+           Slider('noise_size', 1, 20, 1, value_type='int', orientation='vertical') + \
+           Slider('minmass', 1, 10000, 100, value_type='int', orientation='vertical')
+        viewer = Viewer(RandomReader(shape=(128, 128))) + Locate
         viewer.show()
 
     def test_viewer_annotate(self):
         f = pd.DataFrame(np.random.random((100, 2)) * 128, columns=['x', 'y'])
         f['frame'] = np.repeat(np.arange(10), 10)
-        (Viewer(RandomReader()) + ViewerAnnotate(f)).show()
+        (Viewer(RandomReader()) + AnnotatePlugin(f)).show()
 
 
 if __name__ == '__main__':
     nose.runmodule(argv=[__file__, '-vvs'], exit=False)
-
-import numpy as np
-from pimsviewer import ViewerPipeline, Slider, ViewerPlotting
-
-
-def convert_to_grey(img, r, g, b):
-    color_axis = img.shape.index(3)
-    img = np.rollaxis(img, color_axis, 3)
-    grey = (img * [r, g, b]).sum(2)
-    return grey.astype(img.dtype)  # coerce to original dtype
-
-
-def add_noise(img, noise_level):
-    return img + np.random.random(img.shape) * noise_level
-
-def tp_locate(image, radius, minmass, separation, noise_size, ax):
-    _plot_style = dict(markersize=15, markeredgewidth=2,
-                       markerfacecolor='none', markeredgecolor='r',
-                       marker='o', linestyle='none')
-    from trackpy import locate
-    f = locate(image, radius * 2 + 1, minmass, None, separation, noise_size)
-    if len(f) == 0:
-        return None
-    else:
-        return ax.plot(f['x'], f['y'], **_plot_style)
-
-# TODO: this does not work because it changes the image shape
-# RGBToGrey = ViewerPipeline(convert_to_grey, 'RGB to Grey', dock='right') + \
-#             Slider('r', 0, 1, 0.2125, orientation='vertical') + \
-#             Slider('g', 0, 1, 0.7154, orientation='vertical') + \
-#             Slider('b', 0, 1, 0.0721, orientation='vertical')
-
-Locate = ViewerPlotting(tp_locate, 'Locate', dock='right') + \
-       Slider('radius', 1, 20, 7, value_type='int', orientation='vertical') + \
-       Slider('separation', 1, 20, 7, value_type='float', orientation='vertical') + \
-       Slider('noise_size', 1, 20, 1, value_type='int', orientation='vertical') + \
-       Slider('minmass', 1, 10000, 100, value_type='int', orientation='vertical')

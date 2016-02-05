@@ -72,6 +72,22 @@ def to_rgb_uint8(image, autoscale=True):
     return image
 
 
+def df_add_row(df, default_float=np.nan, default_int=-1, default_bool=False):
+    values = []
+    for col, dtype in zip(df.columns, df.dtypes):
+        if np.issubdtype(dtype, np.float):
+            values.append(default_float)
+        elif np.issubdtype(dtype, np.integer):
+            values.append(default_int)
+        elif np.issubdtype(dtype, np.bool):
+            values.append(default_bool)
+        else:
+            raise ValueError()
+    index = df.index.max() + 1
+    df.loc[index] = values
+    return index
+
+
 def wrap_frames_sequence(frames):
     shape = frames.frame_shape
     ndim = len(shape)
@@ -111,7 +127,7 @@ class ND_Wrapper(FramesSequenceND):
         return self._reader.pixel_type
 
     def __getattr__(self, attr):
-        return self._reader.__getattr__(attr)
+        return getattr(self._reader, attr)
 
 
 class ND_Wrapper_2D(ND_Wrapper):
