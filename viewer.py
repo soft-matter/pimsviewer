@@ -9,6 +9,7 @@ import warnings
 
 import numpy as np
 from pims import FramesSequence, FramesSequenceND, Frame
+from pimsviewer.base_frames import FramesSequenceND as FramesSequenceNew
 
 from pimsviewer.widgets import (CheckBox, DockWidget, VideoTimer, Slider)
 from pimsviewer.qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
@@ -146,7 +147,7 @@ class Viewer(QtWidgets.QMainWindow):
 
     def update_reader(self, reader):
         """Load a new reader into the Viewer."""
-        if not isinstance(reader, FramesSequenceND):
+        if not (isinstance(reader, FramesSequenceND) or isinstance(reader, FramesSequenceNew)):
             reader = wrap_frames_sequence(reader)
         self._readers = [reader]
         reader.iter_axes = ''
@@ -228,8 +229,7 @@ class Viewer(QtWidgets.QMainWindow):
 
     def update_image(self):
         """Update the image that is being viewed."""
-        ndim = self.renderer.ndim
-        if ndim == 3 and 'z' not in self.reader.sizes:
+        if self.renderer.ndim == 3 and 'z' not in self.reader.sizes:
             raise ValueError('z axis does not exist: cannot display in 3D')
         if self.is_multichannel and 'c' not in self.reader.sizes:
             raise ValueError('c axis does not exist: cannot display multicolor')
@@ -238,7 +238,7 @@ class Viewer(QtWidgets.QMainWindow):
         bundle_axes = ''
         if self.is_multichannel:
             bundle_axes += 'c'
-        if ndim == 3:
+        if self.renderer.ndim == 3:
             bundle_axes += 'z'
         self.reader.bundle_axes = bundle_axes + 'yx'
 
