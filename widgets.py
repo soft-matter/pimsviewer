@@ -18,8 +18,8 @@ class DockWidget(QtWidgets.QDockWidget):
 
 class VideoTimer(QtCore.QTimer):
     next_frame = Signal(int)
-    def __init__(self, *args):
-        super(VideoTimer, self).__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super(VideoTimer, self).__init__(*args, **kwargs)
         self.timeout.connect(self.update)
         self.index = None
         self._len = None

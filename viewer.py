@@ -191,6 +191,12 @@ class Viewer(QtWidgets.QMainWindow):
                                          QtGui.QDockWidget.DockWidgetMovable)
             self.addDockWidget(Qt.BottomDockWidgetArea, self.slider_dock)
 
+        # set playback speed
+        try:
+            self._timer.fps = self.reader.frame_rate
+        except AttributeError:
+            self._timer.fps = 25.
+
         self.update_display()
 
     def close_reader(self):
@@ -310,12 +316,6 @@ class Viewer(QtWidgets.QMainWindow):
 
     def play(self, fps=None):
         """Start the movie."""
-        if fps is None:
-            try:
-                self._timer.fps = self.reader.frame_rate
-            except AttributeError:
-                self._timer.fps = 25.
-
         self._timer.start(self._index['t'], self.reader.sizes['t'])
         self._timer.next_frame.connect(lambda x: self.set_index(x))
         self.is_playing = True
