@@ -9,7 +9,6 @@ import warnings
 
 import numpy as np
 from pims import FramesSequence, FramesSequenceND, Frame
-from pimsviewer.base_frames import FramesSequenceND as FramesSequenceNew
 
 from pimsviewer.widgets import (CheckBox, DockWidget, VideoTimer, Slider)
 from pimsviewer.qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
@@ -147,7 +146,7 @@ class Viewer(QtWidgets.QMainWindow):
 
     def update_reader(self, reader):
         """Load a new reader into the Viewer."""
-        if not (isinstance(reader, FramesSequenceND) or isinstance(reader, FramesSequenceNew)):
+        if not isinstance(reader, FramesSequenceND):
             reader = wrap_frames_sequence(reader)
         self._readers = [reader]
         reader.iter_axes = ''

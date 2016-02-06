@@ -6,7 +6,7 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 
 import numpy as np
 from pimsviewer.qt import (QtGui, QtCore, QtWidgets, FigureCanvasQTAgg,
-                           rgb_view, has_qimage2ndarray)
+                           array2qimage, has_qimage2ndarray)
 
 try:
     import matplotlib as mpl
