@@ -55,6 +55,7 @@ class Viewer(QtWidgets.QMainWindow):
         self.is_multichannel = False
         self.is_playing = False
         self._index = dict()
+        self.result_val = []
 
         # Start main loop
         init_qtapp()
@@ -355,7 +356,7 @@ class Viewer(QtWidgets.QMainWindow):
         if main_window:
             start_qtapp()
 
-        return self._readers
+        return self._readers, self.result_val
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls:
@@ -504,6 +505,13 @@ class Viewer(QtWidgets.QMainWindow):
         clip.write_videofile(filename, rate, codec=codec, audio=False)
         self.status = 'Done saving {}'.format(filename)
 
+    def closeEvent(self, event):
+        for p in self.plugins:
+            if hasattr(p, 'result_val'):
+                self.result_val.append(p.result_val)
+                p.close()
+        super(Viewer, self).closeEvent(event)
+
 
 class Plugin(QtWidgets.QDialog):
     def __init__(self, height=0, width=400, dock='bottom'):
@@ -527,6 +535,7 @@ class Plugin(QtWidgets.QDialog):
         self.setParent(viewer)
         self.setWindowFlags(QtCore.Qt.Dialog)
         self.viewer = viewer
+        self.viewer.plugins.append(self)
 
     def add_widget(self, widget):
         """Add widget to pipeline.
@@ -565,3 +574,4 @@ class Plugin(QtWidgets.QDialog):
         super(Plugin, self).show()
         self.activateWindow()
         self.raise_()
+

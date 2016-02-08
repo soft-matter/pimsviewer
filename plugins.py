@@ -79,7 +79,6 @@ class PipelinePlugin(Plugin):
         the image matches the filtered value specified by attached widgets.
         """
         super(PipelinePlugin, self).attach(viewer)
-        self.viewer.plugins.append(self)
         self.viewer._readers += [None]
         self.reader_index = len(self.viewer._readers) - 1
         self.viewer._readers[self.reader_index] = self.viewer._readers[self.reader_index - 1]
