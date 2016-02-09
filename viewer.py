@@ -43,6 +43,8 @@ class Viewer(QtWidgets.QMainWindow):
                   'right': Qt.RightDockWidgetArea}
     _dropped = Signal(list)
     image_changed = Signal()
+    undo = Signal()
+    redo = Signal()
 
     def __init__(self, reader=None, width=800, height=600):
         self.plugins = []
@@ -435,9 +437,13 @@ class Viewer(QtWidgets.QMainWindow):
             elif key == QtCore.Qt.Key_Minus:
                 if hasattr(self.renderer, 'zoom'):
                     self.renderer.zoom(-1)
-            elif key == QtCore.Qt.Key_Z:
+            elif key == QtCore.Qt.Key_R:
                 if hasattr(self.renderer, 'zoom'):
                     self.renderer.zoom()
+            elif key == QtCore.Qt.Key_Z:
+                self.undo.emit()
+            elif key == QtCore.Qt.Key_Y:
+                self.redo.emit()
             else:
                 event.ignore()
         else:

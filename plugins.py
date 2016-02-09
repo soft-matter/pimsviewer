@@ -6,7 +6,7 @@ from pimsviewer.widgets import Text
 from pimsviewer.viewer import Plugin
 from pimsviewer.display import DisplayMPL
 from pimsviewer.utils import df_add_row
-
+from collections import deque
 
 def remove_artists(artists):
     """Call artist.remove() on a nested list of artists."""
@@ -176,6 +176,8 @@ class AnnotatePlugin(Plugin):
         self.dragging = False
         self._no_pick = None
         self._no_click = None
+        self._undo = deque([], 10)
+        self._redo = deque([], 10)
         if 'hide' not in self.features:
             self.features['hide'] = False
 
@@ -189,6 +191,8 @@ class AnnotatePlugin(Plugin):
         self.canvas = viewer.renderer.widget
 
         self.viewer.image_changed.connect(self.process)
+        self.viewer.undo.connect(self.undo)
+        self.viewer.redo.connect(self.redo)
         self.canvas.mpl_connect('pick_event', self.on_pick)
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('button_release_event', self.on_release)
@@ -243,6 +247,26 @@ class AnnotatePlugin(Plugin):
             self.artist = [self.artist, texts]
         self.canvas.draw_idle()
 
+    def set_features(self, new_f):
+        self._undo.append(self.features.copy())
+        self.features = new_f
+        self._redo.clear()
+        self.process()
+
+    def undo(self):
+        if len(self._undo) == 0:
+            return
+        self._redo.append(self.features)
+        self.features = self._undo.pop()
+        self.process()
+
+    def redo(self):
+        if len(self._redo) == 0:
+            return
+        self._undo.append(self.features)
+        self.features = self._redo.pop()
+        self.process()
+
     @property
     def selected(self):
         return self._selected
@@ -275,19 +299,19 @@ class AnnotatePlugin(Plugin):
                 self.dragging = True
         elif button == 3 and not dblclick:  # right mouse: hide
             self.selected = None
-            self.features.loc[index, 'hide'] = not self.features.loc[index, 'hide']
-            self.process()
+            f = self.features.copy()
+            f.loc[index, 'hide'] = not f.loc[index, 'hide']
+            self.set_features(f)
         elif button == 3 and dblclick:  # right mouse double: hide track
             if 'particle' in self.features:
-                particle_id = self.features.loc[index, 'particle']
-                was_hidden = not self.features.loc[index, 'hide']
+                f = self.features.copy()
+                particle_id = f.loc[index, 'particle']
+                was_hidden = not f.loc[index, 'hide']
                 if was_hidden:
-                    self.features.loc[self.features['particle'] == particle_id,
-                                      'hide'] = False
+                    f.loc[f['particle'] == particle_id, 'hide'] = False
                 else:
-                    self.features.loc[self.features['particle'] == particle_id,
-                                      'hide'] = True
-                self.process()
+                    f.loc[f['particle'] == particle_id, 'hide'] = True
+                self.set_features(f)
 
     def on_press(self, event):
         if (event.inaxes != self.ax) or (event is self._no_click):
@@ -297,10 +321,11 @@ class AnnotatePlugin(Plugin):
                 self.selected = None
                 self.process()
         elif event.button == 3 and event.dblclick:
-            new_index = df_add_row(self.features)
-            self.features.loc[new_index, ['x', 'y']] = event.xdata, event.ydata
-            self.features.loc[new_index, 'frame'] = self.viewer.index['t']
-            self.process()
+            f = self.features.copy()
+            new_index = df_add_row(f)
+            f.loc[new_index, ['x', 'y']] = event.xdata, event.ydata
+            f.loc[new_index, 'frame'] = self.viewer.index['t']
+            self.set_features(f)
 
     def on_release(self, event):
         if ((not self.dragging) or (event.inaxes != self.ax)
@@ -308,9 +333,10 @@ class AnnotatePlugin(Plugin):
             return
         self.dragging = False
         if event.button == 2:
-            self.features.loc[self.selected, ['x', 'y']] = event.xdata, event.ydata
-            if 'gaussian' in self.features:
-                self.features.loc[self.selected, 'gaussian'] = False
-            if 'particle' in self.features:
-                self.features.loc[self.selected, 'particle'] = -1
-            self.process()
+            f = self.features.copy()
+            f.loc[self.selected, ['x', 'y']] = event.xdata, event.ydata
+            if 'gaussian' in f:
+                f.loc[self.selected, 'gaussian'] = False
+            if 'particle' in f:
+                f.loc[self.selected, 'particle'] = -1
+            self.set_features(f)
