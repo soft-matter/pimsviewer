@@ -32,7 +32,7 @@ class VideoTimer(QtCore.QTimer):
     @fps.setter
     def fps(self, value):
         self._interval = 1 / value
-        self.setInterval(self._interval * 1000)
+        self.setInterval(abs(self._interval) * 1000)
         self.reset(self.index) # restart index calculation because of different fps
 
     def start(self, index, length):

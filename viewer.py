@@ -233,6 +233,7 @@ class Viewer(QtWidgets.QMainWindow):
                                            QtGui.QSizePolicy.Ignored)
         self.renderer.widget.updateGeometry()
         self.main_layout.addWidget(self.renderer.widget, 0, 0)
+        self.renderer.widget.keyPressEvent = self.keyPressEvent
         self.update_image()
 
     def update_image(self):
@@ -406,43 +407,59 @@ class Viewer(QtWidgets.QMainWindow):
             if key in [QtCore.Qt.Key_N, QtCore.Qt.Key_Right]:
                 self.set_index(self._index['t'] + 1)
                 event.accept()
-            elif key in [QtCore.Qt.Key_P, QtCore.Qt.Key_Left]:
+            elif key in [Qt.Key_P, Qt.Key_Left]:
                 self.set_index(self._index['t'] - 1)
                 event.accept()
-            elif key == QtCore.Qt.Key_R:
+            elif key == Qt.Key_R:
                 index = np.random.randint(0, self.reader.sizes['t'] - 1)
                 self.set_index(index)
                 event.accept()
-            elif key == QtCore.Qt.Key_Space:
+            elif key == Qt.Key_Space:
                 if self.is_playing:
                     self.stop()
                 else:
                     self.play()
                 event.accept()
-            elif key == QtCore.Qt.Key_BracketRight:
+            elif key == Qt.Key_BracketRight:
                 if self.is_playing:
                     self._timer.fps *= 1.2
-            elif key == QtCore.Qt.Key_BracketLeft:
+            elif key == Qt.Key_BracketLeft:
                 if self.is_playing:
                     self._timer.fps *= 0.8
-            elif key == QtCore.Qt.Key_Equal:
+            elif key == Qt.Key_Backslash:
+                if self.is_playing:
+                    self._timer.fps *= -1
+            elif key == Qt.Key_Equal:
                 if self.is_playing:
                     try:
                         self._timer.fps = self.reader.frame_rate
                     except AttributeError:
                         self._timer.fps = 25.
-            elif key == QtCore.Qt.Key_Plus:
+            elif key == Qt.Key_F:
+                if self.renderer.widget.isFullScreen():
+                    self.renderer.widget.setWindowState(Qt.WindowNoState)
+                    self.renderer.widget.setWindowFlags(Qt.Widget)
+                    self.renderer.widget.show()
+                else:
+                    self.renderer.widget.setWindowFlags(Qt.Window)
+                    self.renderer.widget.setWindowState(Qt.WindowFullScreen)
+                    self.renderer.widget.show()
+            elif key == Qt.Key_Escape and self.renderer.widget.isFullScreen():
+                    self.renderer.widget.setWindowState(Qt.WindowNoState)
+                    self.renderer.widget.setWindowFlags(Qt.Widget)
+                    self.renderer.widget.show()
+            elif key == Qt.Key_Plus:
                 if hasattr(self.renderer, 'zoom'):
                     self.renderer.zoom(1)
-            elif key == QtCore.Qt.Key_Minus:
+            elif key == Qt.Key_Minus:
                 if hasattr(self.renderer, 'zoom'):
                     self.renderer.zoom(-1)
-            elif key == QtCore.Qt.Key_R:
+            elif key == Qt.Key_R:
                 if hasattr(self.renderer, 'zoom'):
                     self.renderer.zoom()
-            elif key == QtCore.Qt.Key_Z:
+            elif key == Qt.Key_Z:
                 self.undo.emit()
-            elif key == QtCore.Qt.Key_Y:
+            elif key == Qt.Key_Y:
                 self.redo.emit()
             else:
                 event.ignore()
