@@ -57,7 +57,8 @@ class Viewer(QtWidgets.QMainWindow):
         self.is_multichannel = False
         self.is_playing = False
         self._index = dict()
-        self.result_val = []
+        self.return_val = []
+        self._close_reader = True
 
         # Start main loop
         init_qtapp()
@@ -78,6 +79,7 @@ class Viewer(QtWidgets.QMainWindow):
         self.file_menu.addAction('Open', self.open_file,
                                  Qt.CTRL + Qt.Key_O)
         self.file_menu.addMenu(open_with_menu)
+        self.file_menu.addAction('Close', self.close_reader)
         self.file_menu.addAction('Save', self.save_file,
                                  Qt.CTRL + Qt.Key_S)
         self.file_menu.addAction('Copy', self.to_clipboard,
@@ -203,6 +205,8 @@ class Viewer(QtWidgets.QMainWindow):
         self.update_display()
 
     def close_reader(self):
+        if self.reader is None:
+            return
         if self.is_playing:
             self.stop()
         self.reader.close()
@@ -359,7 +363,7 @@ class Viewer(QtWidgets.QMainWindow):
         if main_window:
             start_qtapp()
 
-        return self._readers, self.result_val
+        return self.return_val
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls:
@@ -530,9 +534,13 @@ class Viewer(QtWidgets.QMainWindow):
 
     def closeEvent(self, event):
         for p in self.plugins:
-            if hasattr(p, 'result_val'):
-                self.result_val.append(p.result_val)
+            if hasattr(p, 'output'):
+                self.return_val.append(p.output())
                 p.close()
+            else:
+                self.return_val.append(None)
+        if self._close_reader:
+            self.close_reader()
         super(Viewer, self).closeEvent(event)
 
 

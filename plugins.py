@@ -127,6 +127,10 @@ class PipelinePlugin(Plugin):
 
         super(PipelinePlugin, self).close()
 
+    def output(self):
+        self.viewer._close_reader = False
+        return self.viewer._readers[self.reader_index]
+
 
 class PlottingPlugin(Plugin):
     def __init__(self, plot_func, name=None, height=0, width=400,

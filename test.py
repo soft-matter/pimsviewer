@@ -13,9 +13,6 @@ from pims import FramesSequence, Frame, pipeline
 
 import pandas as pd
 
-from types import MethodType
-from itertools import chain, permutations
-
 class RandomReader(FramesSequence):
     def __init__(self, length=10, shape=(128, 128), dtype='uint8'):
         self._len = length
