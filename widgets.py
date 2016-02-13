@@ -2,7 +2,7 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import six
-from pimsviewer.qt import Qt, QtWidgets, QtCore, Signal
+from pimsviewer.qt import Qt, QtWidgets, QtCore, QtGui, Signal
 from time import time
 
 from skimage.viewer.widgets import BaseWidget, CheckBox, Text, ComboBox
@@ -219,3 +219,14 @@ class Button(BaseWidget):
     def on_click(self):
         self._button.clearFocus()
         self.callback()
+
+
+class QWidgetMinSize(QtWidgets.QWidget):
+    def __init__(self, min_size, *args, **kwargs):
+        super(QWidgetMinSize, self).__init__(*args, **kwargs)
+        self._min_size = QtCore.QSize(*min_size)
+        self.setSizePolicy(QtGui.QSizePolicy.Preferred,
+                           QtGui.QSizePolicy.Preferred)
+
+    def minimumSizeHint(self):
+        return self._min_size

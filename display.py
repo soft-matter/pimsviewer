@@ -52,6 +52,13 @@ class Display(with_metaclass(ABCMeta, object)):
     def update_image(self, value):
         pass
 
+    def resize(self, w, h):
+        self.widget.resize(w, h)
+        self.widget.updateGeometry()
+        self.viewer.main_widget.adjustSize()
+        self.viewer.main_widget.updateGeometry()
+        self.viewer.adjustSize()
+
 
 class DisplayQt(Display):
     name = 'Qt'

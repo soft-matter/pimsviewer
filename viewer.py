@@ -10,7 +10,8 @@ import warnings
 import numpy as np
 from pims import FramesSequence, FramesSequenceND, Frame
 
-from pimsviewer.widgets import (CheckBox, DockWidget, VideoTimer, Slider)
+from pimsviewer.widgets import (CheckBox, DockWidget, VideoTimer, Slider,
+                                QWidgetMinSize)
 from pimsviewer.qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
                            init_qtapp, start_qtapp, rgb_view)
 from pimsviewer.display import Display, DisplayMPL
@@ -46,7 +47,7 @@ class Viewer(QtWidgets.QMainWindow):
     undo = Signal()
     redo = Signal()
 
-    def __init__(self, reader=None, width=800, height=600):
+    def __init__(self, reader=None):
         self.plugins = []
         self._readers = []
         self._img = None
@@ -94,6 +95,13 @@ class Viewer(QtWidgets.QMainWindow):
                 self.view_menu.addAction(cls.name,
                                          partial(self.update_display,
                                                  display_class=cls))
+        resize_menu = QtWidgets.QMenu('&Resize', self)
+        resize_menu.addAction('33 %', partial(self.resize_display, factor=1/3))
+        resize_menu.addAction('50 %', partial(self.resize_display, factor=1/2))
+        resize_menu.addAction('100 %', partial(self.resize_display, factor=1))
+        resize_menu.addAction('200 %', partial(self.resize_display, factor=2))
+        resize_menu.addAction('300 %', partial(self.resize_display, factor=3))
+        self.view_menu.addMenu(resize_menu)
         self.menuBar().addMenu(self.view_menu)
 
         self.pipeline_menu = QtWidgets.QMenu('&Pipelines', self)
@@ -106,9 +114,10 @@ class Viewer(QtWidgets.QMainWindow):
 
         self.main_widget = QtWidgets.QWidget(self)
         self.setCentralWidget(self.main_widget)
+        self.setMinimumSize(200, 200)
+        self.setSizePolicy(QtGui.QSizePolicy.Preferred,
+                           QtGui.QSizePolicy.Preferred)
         self.main_layout = QtWidgets.QGridLayout(self.main_widget)
-
-        self.resize(width, height)
 
         self.setAcceptDrops(True)
         self._dropped.connect(self._open_dropped)
@@ -118,6 +127,19 @@ class Viewer(QtWidgets.QMainWindow):
         self._timer = VideoTimer(self)
         if reader is not None:
             self.update_reader(reader)
+
+    def resize_display(self, w=None, h=None, factor=1):
+        h_im, w_im = self.image.shape[-2:]
+        h_im *= factor
+        w_im *= factor
+        if h is None and w is None:
+            h = h_im
+            w = w_im
+        elif h is None:
+            h = int(w * h_im / w_im)
+        elif w is None:
+            w = int(h * w_im / h_im)
+        self.renderer.resize(w, h)
 
     def open_file(self, filename=None, reader_cls=None):
         """Open image file and display in viewer."""
@@ -203,6 +225,7 @@ class Viewer(QtWidgets.QMainWindow):
             self._timer.fps = 25.
 
         self.update_display()
+        self.resize_display()
 
     def close_reader(self):
         if self.reader is None:
@@ -233,8 +256,8 @@ class Viewer(QtWidgets.QMainWindow):
             self.renderer.close()
         self.renderer = display_class(self, shape)
 
-        self.renderer.widget.setSizePolicy(QtGui.QSizePolicy.Ignored,
-                                           QtGui.QSizePolicy.Ignored)
+        self.renderer.widget.setSizePolicy(QtGui.QSizePolicy.Expanding,
+                                           QtGui.QSizePolicy.Expanding)
         self.renderer.widget.updateGeometry()
         self.main_layout.addWidget(self.renderer.widget, 0, 0)
         self.renderer.widget.keyPressEvent = self.keyPressEvent
@@ -314,7 +337,6 @@ class Viewer(QtWidgets.QMainWindow):
         self.is_multichannel = index == 0
         if index > 0:  # monochannel: update channel field
             self._index['c'] = index - 1  # because 0 is multichannel
-        print('update to {}'.format(index))
         self.update_image()
 
     def play_callback(self, name, value):
@@ -474,6 +496,12 @@ class Viewer(QtWidgets.QMainWindow):
                 self.undo.emit()
             elif key == Qt.Key_Y:
                 self.redo.emit()
+            elif key == Qt.Key_A:
+                self.resize_display(factor=1/2)
+            elif key == Qt.Key_S:
+                self.resize_display(factor=1)
+            elif key == Qt.Key_D:
+                self.resize_display(factor=2)
             else:
                 event.ignore()
         else:
