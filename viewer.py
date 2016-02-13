@@ -307,11 +307,15 @@ class Viewer(QtWidgets.QMainWindow):
 
     def channel_tab_callback(self, index):
         """Callback function for channel tabs."""
+        if index == 0 and self.is_multichannel:
+            return  # do nothing: already multichannel
+        elif not self.is_multichannel and (self._index['c'] == index - 1):
+            return  # do nothing: correct monochannel
         self.is_multichannel = index == 0
         if index > 0:  # monochannel: update channel field
-            self.set_index(index - 1, 'c')  # because 0 is multichannel
-        else:  # just update image
-            self.update_image()
+            self._index['c'] = index - 1  # because 0 is multichannel
+        print('update to {}'.format(index))
+        self.update_image()
 
     def play_callback(self, name, value):
         """Callback function for play checkbox."""
@@ -405,9 +409,14 @@ class Viewer(QtWidgets.QMainWindow):
     def keyPressEvent(self, event):
         if type(event) == QtWidgets.QKeyEvent:
             key = event.key()
-            # Number keys (code: 0 = key 48, 9 = key 57) move to deciles
-            if key in range(48, 58):
+            if key in range(0x30, 0x39 + 1):  # number keys: move to deciles
                 self.set_index(int(self.reader.sizes['t'] * (key - 48) / 10))
+            if key in range(0x01000037,       # F8-F12 keys: change channel
+                            0x0100003b + 1) and 'c' in self.reader.sizes:
+                index = key - 0x01000037
+                print('key pressed to {}'.format(index))
+                if index <= self.reader.sizes['c']:
+                    self.channel_tabs.setCurrentIndex(index)
             if key in [QtCore.Qt.Key_N, QtCore.Qt.Key_Right]:
                 self.set_index(self._index['t'] + 1)
                 event.accept()
