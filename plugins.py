@@ -175,7 +175,10 @@ class AnnotatePlugin(Plugin):
     def __init__(self, features):
         super(AnnotatePlugin, self).__init__(dock='left')
         self.artist = None
-        self.features = features
+        if features.index.is_unique:
+            self.features = features.copy()
+        else:
+            self.features = features.reset_index(inplace=False, drop=True)
         self._selected = None
         self.dragging = False
         self._no_pick = None
@@ -234,7 +237,8 @@ class AnnotatePlugin(Plugin):
                     colors.append('blue')
                 else:
                     colors.append('red')
-            self.artist = self.ax.scatter(f_frame['x'], f_frame['y'],
+            self.artist = self.ax.scatter(f_frame['x'] + 0.5,
+                                          f_frame['y'] + 0.5,
                                           edgecolors=colors,
                                           picker=self.picking_tolerance,
                                           **_plot_style)
