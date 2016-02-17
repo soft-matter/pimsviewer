@@ -5,7 +5,7 @@ from six import with_metaclass
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 import numpy as np
-from pimsviewer.qt import (QtGui, QtCore, QtWidgets, FigureCanvasQTAgg,
+from pimsviewer.qt import (Qt, QtGui, QtCore, QtWidgets, FigureCanvasQTAgg,
                            array2qimage, has_qimage2ndarray)
 
 try:
@@ -53,11 +53,27 @@ class Display(with_metaclass(ABCMeta, object)):
         pass
 
     def resize(self, w, h):
+        self.set_fullscreen(False)
         self.widget.resize(w, h)
         self.widget.updateGeometry()
         self.viewer.main_widget.adjustSize()
         self.viewer.main_widget.updateGeometry()
         self.viewer.adjustSize()
+
+    def set_fullscreen(self, value=None):
+        is_fullscreen = self.widget.isFullScreen()
+        if value is None:
+            value = not is_fullscreen
+        elif value == is_fullscreen:
+            return
+        if value:
+            self.widget.setWindowFlags(Qt.Window)
+            self.widget.setWindowState(Qt.WindowFullScreen)
+            self.widget.show()
+        else:
+            self.widget.setWindowState(Qt.WindowNoState)
+            self.widget.setWindowFlags(Qt.Widget)
+            self.widget.show()
 
 
 class DisplayQt(Display):
