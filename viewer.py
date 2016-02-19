@@ -8,6 +8,7 @@ from itertools import chain
 import warnings
 
 import numpy as np
+import pims
 from pims import FramesSequence, FramesSequenceND, Frame
 
 from pimsviewer.widgets import (CheckBox, DockWidget, VideoTimer, Slider,
@@ -154,7 +155,6 @@ class Viewer(QtWidgets.QMainWindow):
                 filename = filename[0]
         if filename is None or len(filename) == 0:
             return
-        import pims
         if reader_cls is None:
             reader = pims.open(filename)
         else:
@@ -471,18 +471,9 @@ class Viewer(QtWidgets.QMainWindow):
                     except AttributeError:
                         self._timer.fps = 25.
             elif key == Qt.Key_F:
-                if self.renderer.widget.isFullScreen():
-                    self.renderer.widget.setWindowState(Qt.WindowNoState)
-                    self.renderer.widget.setWindowFlags(Qt.Widget)
-                    self.renderer.widget.show()
-                else:
-                    self.renderer.widget.setWindowFlags(Qt.Window)
-                    self.renderer.widget.setWindowState(Qt.WindowFullScreen)
-                    self.renderer.widget.show()
-            elif key == Qt.Key_Escape and self.renderer.widget.isFullScreen():
-                    self.renderer.widget.setWindowState(Qt.WindowNoState)
-                    self.renderer.widget.setWindowFlags(Qt.Widget)
-                    self.renderer.widget.show()
+                self.renderer.set_fullscreen()
+            elif key == Qt.Key_Escape:
+                self.renderer.set_fullscreen(False)
             elif key == Qt.Key_Plus:
                 if hasattr(self.renderer, 'zoom'):
                     self.renderer.zoom(1)
