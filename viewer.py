@@ -307,7 +307,7 @@ class Viewer(QtWidgets.QMainWindow):
         if value < 0:
             value = 0
         elif value >= self.reader.sizes[name]:
-            value[name] = self.reader.sizes[name] - 1
+            value = self.reader.sizes[name] - 1
         try:
             if self._index[name] == value:
                 return  # do nothing when no coordinate was changed

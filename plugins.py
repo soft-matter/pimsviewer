@@ -172,6 +172,7 @@ class PlottingPlugin(Plugin):
 class AnnotatePlugin(Plugin):
     name = 'Annotate'
     picking_tolerance = 5
+
     def __init__(self, features):
         super(AnnotatePlugin, self).__init__(dock='left')
         self.artist = None
@@ -179,14 +180,14 @@ class AnnotatePlugin(Plugin):
             self.features = features.copy()
         else:
             self.features = features.reset_index(inplace=False, drop=True)
+        if 'hide' not in self.features:
+            self.features['hide'] = False
         self._selected = None
         self.dragging = False
         self._no_pick = None
         self._no_click = None
         self._undo = deque([], 10)
         self._redo = deque([], 10)
-        if 'hide' not in self.features:
-            self.features['hide'] = False
 
     def attach(self, viewer):
         super(AnnotatePlugin, self).attach(viewer)
@@ -243,17 +244,21 @@ class AnnotatePlugin(Plugin):
                                           picker=self.picking_tolerance,
                                           **_plot_style)
             texts = []
-            for i, color in zip(self.indices, colors):
-                x, y, p = self.features.loc[i, ['x', 'y', 'particle']]
-                try:
-                    p = str(int(p))
-                except ValueError:
-                    pass
-                else:
-                    texts.append(self.ax.text(x+text_offset, y-text_offset, p,
-                                              color=color, **_text_style))
+            if 'particle' in self.features:
+                for i, color in zip(self.indices, colors):
+                    x, y, p = self.features.loc[i, ['x', 'y', 'particle']]
+                    try:
+                        p = str(int(p))
+                    except ValueError:
+                        pass
+                    else:
+                        texts.append(self.ax.text(x+text_offset, y-text_offset, p,
+                                                  color=color, **_text_style))
             self.artist = [self.artist, texts]
         self.canvas.draw_idle()
+
+    def output(self):
+        return self.features
 
     def set_features(self, new_f):
         self._undo.append(self.features.copy())
@@ -321,6 +326,7 @@ class AnnotatePlugin(Plugin):
                     f.loc[f['particle'] == particle_id, 'hide'] = True
                 self.set_features(f)
 
+
     def on_press(self, event):
         if (event.inaxes != self.ax) or (event is self._no_click):
             return
@@ -334,6 +340,7 @@ class AnnotatePlugin(Plugin):
             f.loc[new_index, ['x', 'y']] = event.xdata, event.ydata
             f.loc[new_index, 'frame'] = self.viewer.index['t']
             self.set_features(f)
+
 
     def on_release(self, event):
         if ((not self.dragging) or (event.inaxes != self.ax)
