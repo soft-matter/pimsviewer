@@ -577,6 +577,7 @@ class Viewer(QtWidgets.QMainWindow):
                 self.return_val.append(None)
         if self._close_reader:
             self.close_reader()
+        self.renderer.close()
         super(Viewer, self).closeEvent(event)
 
 
