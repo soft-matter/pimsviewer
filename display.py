@@ -247,7 +247,10 @@ class DisplayMPL(Display):
     def on_scroll(self, event):
         if event.inaxes != self.ax:
             return
-        self.zoom(event.step, (event.ydata, event.xdata))
+        if 'z' in self.viewer.axes:
+            self.viewer.set_index(self.viewer.index['z'] - event.step, 'z')
+        else:
+            self.zoom(event.step, (event.ydata, event.xdata))
 
 
 class DisplayMPL_mip(DisplayMPL):

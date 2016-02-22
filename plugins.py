@@ -214,7 +214,12 @@ class AnnotatePlugin(Plugin):
         _plot_style = dict(s=200, linewidths=2, facecolors='none', marker='o')
         _text_style = dict()
         text_offset = 2
-        f_frame = self.features[self.features['frame'] == frame_no]
+        if 'z' in self.viewer.axes:
+            z = self.viewer.index['z'] + 0.5
+            f_frame = self.features[(self.features['frame'] == frame_no) &
+                                    (np.abs(self.features['z'] - z) <= 0.5)]
+        else:
+            f_frame = self.features[self.features['frame'] == frame_no]
         self.indices = f_frame.index
         if self.selected not in self.indices:
             self.selected = None
@@ -338,13 +343,15 @@ class AnnotatePlugin(Plugin):
             f = self.features.copy()
             new_index = df_add_row(f)
             f.loc[new_index, ['x', 'y']] = event.xdata, event.ydata
+            if 'z' in self.viewer.axes:
+                f.loc[new_index, 'z'] = self.viewer.index['z'] + 0.5
             f.loc[new_index, 'frame'] = self.viewer.index['t']
             self.set_features(f)
 
 
     def on_release(self, event):
         if ((not self.dragging) or (event.inaxes != self.ax)
-            or (self.selected is None) or (event is self._no_click)):
+                or (self.selected is None) or (event is self._no_click)):
             return
         self.dragging = False
         if event.button == 2:

@@ -328,6 +328,14 @@ class Viewer(QtWidgets.QMainWindow):
         self._img = image
         self.update_view()
 
+    @property
+    def sizes(self):
+        return self.reader.sizes.copy()
+
+    @property
+    def axes(self):
+        return self.reader.axes.copy()
+
     def channel_tab_callback(self, index):
         """Callback function for channel tabs."""
         if index == 0 and self.is_multichannel:

@@ -132,6 +132,12 @@ class TestViewer(unittest.TestCase):
         f['particle'] = np.tile(np.arange(10), 10)
         (Viewer(RandomReader(shape=(128, 128))) + AnnotatePlugin(f)).show()
 
+    def test_viewer_annotate_3d(self):
+        f = pd.DataFrame(np.random.random((100, 3)) * np.array([100, 100, 30]) + 10, columns=['x', 'y', 'z'])
+        f['frame'] = np.repeat(np.arange(10), 10)
+        f['particle'] = np.tile(np.arange(10), 10)
+        (Viewer(RandomReader(shape=(50, 128, 128))) + AnnotatePlugin(f)).show()
+
 
 if __name__ == '__main__':
     nose.runmodule(argv=[__file__, '-vvs'], exit=False)
