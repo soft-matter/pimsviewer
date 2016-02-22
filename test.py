@@ -132,10 +132,16 @@ class TestViewer(unittest.TestCase):
         f['particle'] = np.tile(np.arange(10), 10)
         (Viewer(RandomReader(shape=(128, 128))) + AnnotatePlugin(f)).show()
 
+    def test_viewer_annotate_mp(self):
+        f = pd.DataFrame(np.random.random((300, 2)) * 100 + 10, columns=['x', 'y'])
+        f['frame'] = np.repeat(np.arange(30), 10)
+        f['particle'] = np.tile(np.arange(10), 30)
+        (Viewer(RandomReader(shape=(128, 128, 3))) + AnnotatePlugin(f, frame_axes='tc')).show()
+
     def test_viewer_annotate_3d(self):
-        f = pd.DataFrame(np.random.random((100, 3)) * np.array([100, 100, 30]) + 10, columns=['x', 'y', 'z'])
-        f['frame'] = np.repeat(np.arange(10), 10)
-        f['particle'] = np.tile(np.arange(10), 10)
+        f = pd.DataFrame(np.random.random((3000, 3)) * np.array([100, 100, 30]) + 10, columns=['x', 'y', 'z'])
+        f['frame'] = np.repeat(np.arange(10), 300)
+        f['particle'] = np.tile(np.arange(300), 10)
         (Viewer(RandomReader(shape=(50, 128, 128))) + AnnotatePlugin(f)).show()
 
 

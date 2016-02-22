@@ -173,7 +173,7 @@ class AnnotatePlugin(Plugin):
     name = 'Annotate'
     picking_tolerance = 5
 
-    def __init__(self, features):
+    def __init__(self, features, frame_axes='t'):
         super(AnnotatePlugin, self).__init__(dock='left')
         self.artist = None
         if features.index.is_unique:
@@ -184,6 +184,7 @@ class AnnotatePlugin(Plugin):
             self.features['hide'] = False
         self._selected = None
         self.dragging = False
+        self._frame_axes = frame_axes
         self._no_pick = None
         self._no_click = None
         self._undo = deque([], 10)
@@ -210,7 +211,12 @@ class AnnotatePlugin(Plugin):
         self.process()
 
     def process(self, *widget_arg):
-        frame_no = self.viewer.index['t']
+        iter_size = 1
+        frame_no = 0
+        for ax in reversed(self._frame_axes):
+            coord = self.viewer.index[ax]
+            frame_no += iter_size * coord
+            iter_size *= coord
         _plot_style = dict(s=200, linewidths=2, facecolors='none', marker='o')
         _text_style = dict()
         text_offset = 2
