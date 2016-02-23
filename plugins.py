@@ -8,6 +8,7 @@ from pimsviewer.display import DisplayMPL
 from pimsviewer.utils import df_add_row
 from collections import deque
 
+
 def remove_artists(artists):
     """Call artist.remove() on a nested list of artists."""
     if isinstance(artists, list):
@@ -15,6 +16,16 @@ def remove_artists(artists):
             remove_artists(artist)
     else:
         artists.remove()
+
+
+def get_frame_no(indices, frame_axes):
+    iter_size = 1
+    frame_no = 0
+    for ax in reversed(frame_axes):
+        coord = indices[ax]
+        frame_no += iter_size * coord
+        iter_size *= coord
+    return frame_no
 
 
 class PipelinePlugin(Plugin):
@@ -211,16 +222,11 @@ class AnnotatePlugin(Plugin):
         self.process()
 
     def process(self, *widget_arg):
-        iter_size = 1
-        frame_no = 0
-        for ax in reversed(self._frame_axes):
-            coord = self.viewer.index[ax]
-            frame_no += iter_size * coord
-            iter_size *= coord
+        frame_no = get_frame_no(self.viewer.index, self._frame_axes)
         _plot_style = dict(s=200, linewidths=2, facecolors='none', marker='o')
         _text_style = dict()
         text_offset = 2
-        if 'z' in self.viewer.axes:
+        if 'z' in self.viewer.sizes:
             z = self.viewer.index['z'] + 0.5
             f_frame = self.features[(self.features['frame'] == frame_no) &
                                     (np.abs(self.features['z'] - z) <= 0.5)]
@@ -337,7 +343,6 @@ class AnnotatePlugin(Plugin):
                     f.loc[f['particle'] == particle_id, 'hide'] = True
                 self.set_features(f)
 
-
     def on_press(self, event):
         if (event.inaxes != self.ax) or (event is self._no_click):
             return
@@ -349,11 +354,11 @@ class AnnotatePlugin(Plugin):
             f = self.features.copy()
             new_index = df_add_row(f)
             f.loc[new_index, ['x', 'y']] = event.xdata, event.ydata
-            if 'z' in self.viewer.axes:
+            if 'z' in self.viewer.sizes:
                 f.loc[new_index, 'z'] = self.viewer.index['z'] + 0.5
-            f.loc[new_index, 'frame'] = self.viewer.index['t']
+            f.loc[new_index, 'frame'] = \
+                get_frame_no(self.viewer.index, self._frame_axes)
             self.set_features(f)
-
 
     def on_release(self, event):
         if ((not self.dragging) or (event.inaxes != self.ax)

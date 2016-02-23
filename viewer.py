@@ -68,7 +68,6 @@ class Viewer(QtWidgets.QMainWindow):
 
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setWindowTitle("Python IMage Sequence Viewer")
-
         open_with_menu = QtWidgets.QMenu('Open with', self)
         for cls in set(chain(recursive_subclasses(FramesSequence),
                              recursive_subclasses(FramesSequenceND))):
@@ -91,6 +90,8 @@ class Viewer(QtWidgets.QMainWindow):
         self.menuBar().addMenu(self.file_menu)
 
         self.view_menu = QtWidgets.QMenu('&View', self)
+        self._autoscale = QtWidgets.QAction('&Autoscale', self.view_menu, checkable=True)
+        self.view_menu.addAction(self._autoscale)
         for cls in recursive_subclasses(Display):
             if cls.available:
                 self.view_menu.addAction(cls.name,
@@ -289,11 +290,19 @@ class Viewer(QtWidgets.QMainWindow):
             image.frame_no = self._index['t']
         self.image = image
 
+    @property
+    def autoscale(self):
+        return self._autoscale.isChecked()
+    @autoscale.setter
+    def autoscale(self, value):
+        return self._autoscale.setChecked(value)
+
     def update_view(self):
         """Emit image to display."""
         if self.image is None:
             return
-        self.renderer.image = to_rgb_uint8(self.image, autoscale=True)
+
+        self.renderer.image = to_rgb_uint8(self.image, autoscale=self.autoscale)
         self.image_changed.emit()
 
     @property
@@ -331,10 +340,6 @@ class Viewer(QtWidgets.QMainWindow):
     @property
     def sizes(self):
         return self.reader.sizes.copy()
-
-    @property
-    def axes(self):
-        return self.reader.axes.copy()
 
     def channel_tab_callback(self, index):
         """Callback function for channel tabs."""
