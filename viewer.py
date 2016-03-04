@@ -444,6 +444,7 @@ class Viewer(QtWidgets.QMainWindow):
     def keyPressEvent(self, event):
         if type(event) == QtWidgets.QKeyEvent:
             key = event.key()
+            modifiers = event.modifiers()
             if key in range(0x30, 0x39 + 1):  # number keys: move to deciles
                 self.set_index(int(self.reader.sizes['t'] * (key - 48) / 10))
             if key in range(0x01000037,       # F8-F12 keys: change channel
@@ -453,10 +454,30 @@ class Viewer(QtWidgets.QMainWindow):
                 if index <= self.reader.sizes['c']:
                     self.channel_tabs.setCurrentIndex(index)
             if key in [QtCore.Qt.Key_N, QtCore.Qt.Key_Right]:
-                self.set_index(self._index['t'] + 1)
+                if modifiers == Qt.NoModifier:
+                    jump = 1
+                elif modifiers == Qt.ShiftModifier:
+                    jump = 10
+                elif modifiers == Qt.ControlModifier:
+                    jump = 25
+                elif modifiers == (Qt.ShiftModifier | Qt.ControlModifier):
+                    jump = 100
+                else:
+                    jump = 0
+                self.set_index(self._index['t'] + jump)
                 event.accept()
             elif key in [Qt.Key_P, Qt.Key_Left]:
-                self.set_index(self._index['t'] - 1)
+                if modifiers == Qt.NoModifier:
+                    jump = 1
+                elif modifiers == Qt.ShiftModifier:
+                    jump = 10
+                elif modifiers == Qt.ControlModifier:
+                    jump = 25
+                elif modifiers == (Qt.ShiftModifier | Qt.ControlModifier):
+                    jump = 100
+                else:
+                    jump = 0
+                self.set_index(self._index['t'] - jump)
                 event.accept()
             elif key == Qt.Key_R:
                 index = np.random.randint(0, self.reader.sizes['t'] - 1)
