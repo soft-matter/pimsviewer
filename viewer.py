@@ -90,7 +90,9 @@ class Viewer(QtWidgets.QMainWindow):
         self.menuBar().addMenu(self.file_menu)
 
         self.view_menu = QtWidgets.QMenu('&View', self)
-        self._autoscale = QtWidgets.QAction('&Autoscale', self.view_menu, checkable=True)
+        self._autoscale = QtWidgets.QAction('&Autoscale', self.view_menu,
+                                            checkable=True)
+        self._autoscale.toggled.connect(self.update_view)
         self.view_menu.addAction(self._autoscale)
         for cls in recursive_subclasses(Display):
             if cls.available:
@@ -534,6 +536,12 @@ class Viewer(QtWidgets.QMainWindow):
                      frame_no=self.index['t'])
 
     def save_file(self, filename=None):
+        str_filter = ";;".join(['All files (*.*)',
+                                'H264 video (*.avi)',
+                                'MPEG4 video (*.mp4 *.mov)',
+                                'Windows Media Player video (*.wmv)'])
+
+
         if VideoClip is None:
             raise ImportError('The MoviePy exporter requires moviepy to work.')
 
@@ -542,7 +550,10 @@ class Viewer(QtWidgets.QMainWindow):
                 cur_dir = os.path.dirname(self.reader.filename)
             except AttributeError:
                 cur_dir = ''
-            filename = QtGui.QFileDialog.getSaveFileName(directory=cur_dir)
+            filename = QtGui.QFileDialog.getSaveFileName(self,
+                                                         "Export Movie",
+                                                         cur_dir,
+                                                         str_filter)
             if isinstance(filename, tuple):
                 # Handle discrepancy between PyQt4 and PySide APIs.
                 filename = filename[0]
@@ -550,27 +561,21 @@ class Viewer(QtWidgets.QMainWindow):
         _, ext = os.path.splitext(os.path.basename(filename))
         ext = ext[1:].lower()
         if ext == 'wmv':
-            codec = 'wmv'
+            codec = 'wmv2'
         else:
             codec = None  # let moviepy decide
         if ext == '':
             filename += '.mp4'
 
-        length = self.reader.sizes['t']
         try:
             rate = self.reader.frame_rate
         except AttributeError:
             rate = 25
 
-        def _export_func(t):
-            self.set_index(int(round(t*rate)))
-            return self.to_frame()
-
-        clip = VideoClip(_export_func)
-        clip.duration = (length - 1) / rate
-
+        self.reader.iter_axes = ['t']
         self.status = 'Saving to {}'.format(filename)
-        clip.write_videofile(filename, rate, codec=codec, audio=False)
+        pims.export(self.reader, filename, rate, codec=codec)
+        self.update_image()
         self.status = 'Done saving {}'.format(filename)
 
     def closeEvent(self, event):
