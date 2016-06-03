@@ -1,4 +1,6 @@
 from .viewer import Viewer
+from .plugins import Plugin, PipelinePlugin, PlottingPlugin, AnnotatePlugin
+from .widgets import Button, Slider, CheckBox
 
 try:
     from pimsviewer.qt import has_qt
