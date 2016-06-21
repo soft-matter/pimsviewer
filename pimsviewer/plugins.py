@@ -232,6 +232,7 @@ class AnnotatePlugin(Plugin):
                                     (np.abs(self.features['z'] - z) <= 0.5)]
         else:
             f_frame = self.features[self.features['frame'] == frame_no]
+        f_frame = f_frame[~np.isnan(f_frame[['x', 'y']]).any(1)].copy()
         self.indices = f_frame.index
         if self.selected not in self.indices:
             self.selected = None

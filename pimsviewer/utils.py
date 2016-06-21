@@ -72,6 +72,8 @@ def to_rgb_uint8(image, autoscale=True):
 
 
 def df_add_row(df, default_float=np.nan, default_int=-1, default_bool=False):
+    if np.isnan(df.index).any():
+        raise ValueError('NaN index detected.')
     values = []
     for col, dtype in zip(df.columns, df.dtypes):
         if np.issubdtype(dtype, np.float):
@@ -83,6 +85,8 @@ def df_add_row(df, default_float=np.nan, default_int=-1, default_bool=False):
         else:
             raise ValueError()
     index = df.index.max() + 1
+    if np.isnan(index):
+        index = 0
     df.loc[index] = values
     return index
 
