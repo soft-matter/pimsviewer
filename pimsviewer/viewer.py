@@ -235,13 +235,13 @@ class Viewer(QtWidgets.QMainWindow):
             return
         if self.is_playing:
             self.stop()
-        self.reader.close()
-        self._readers = []
-        self.renderer.close()
         if self.slider_dock is not None:
             self.slider_dock.close()
         if self.channel_tabs is not None:
             self.channel_tabs.close()
+        self.reader.close()
+        self._readers = []
+        self.renderer.close()
 
     def update_display(self, display_class=None):
         """Change display mode."""
