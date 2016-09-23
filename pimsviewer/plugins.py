@@ -224,7 +224,7 @@ class AnnotatePlugin(Plugin):
     def process(self, *widget_arg):
         frame_no = get_frame_no(self.viewer.index, self._frame_axes)
         _plot_style = dict(s=200, linewidths=2, facecolors='none', marker='o')
-        _text_style = dict()
+        _text_style = dict(usetex=False)
         text_offset = 2
         if 'z' in self.viewer.sizes:
             z = self.viewer.index['z'] + 0.5
@@ -270,8 +270,9 @@ class AnnotatePlugin(Plugin):
                     except ValueError:
                         pass
                     else:
-                        texts.append(self.ax.text(x+text_offset, y-text_offset, p,
-                                                  color=color, **_text_style))
+                        texts.append(self.ax.text(x+text_offset, y-text_offset,
+                                                  p, color=color,
+                                                  **_text_style))
             self.artist = [self.artist, texts]
         self.canvas.draw_idle()
 

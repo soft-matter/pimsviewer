@@ -111,9 +111,15 @@ class DisplayMPL(Display):
 
         figsize = np.array((w, h), dtype=float) / dpi * scale
         self.viewer = viewer
+
+        # LaTeX rendering will be too slow. For some reason, matplotlib does
+        # many (costly) calls to texmanager.py's get_text_width_height_descent
+        # also when no axes and no text are drawn. This can only be disabled via
+        # the global rcParam, like so:
+        mpl.rcParams['text.usetex'] = False
+
         self.fig = plt.Figure(figsize=figsize, dpi=dpi)
         self.canvas = FigureCanvasQTAgg(self.fig)
-
         self.ax = self.fig.add_subplot(1, 1, 1)
         self.fig.subplots_adjust(left=0, bottom=0, right=1, top=1)
         self.ax.set_axis_off()
