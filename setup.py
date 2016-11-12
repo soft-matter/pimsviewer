@@ -20,7 +20,7 @@ setup_parameters = dict(
     author="Casper van der Wel",
     author_email="caspervdw@gmail.com",
     url="https://bitbucket.org/caspervdw/pimsviewer",
-    install_requires=['scikit-image>=0.9', 'matplotlib', 'pims'],
+    install_requires=['scikit-image>=0.11', 'matplotlib', 'pims>=0.4'],
     packages=['pimsviewer'],
     long_description=descr,
 )

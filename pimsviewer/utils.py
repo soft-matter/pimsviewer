@@ -135,6 +135,7 @@ class ND_Wrapper(FramesSequenceND):
     no_reader = True
     propagate_attrs = ['sizes', 'default_coords', 'bundle_axes', 'iter_axes']
     def __init__(self, frames, reads_axes, **sizes):
+        super(ND_Wrapper, self).__init__()
         self._reader = frames
         for ax in sizes:
             self._init_axis(ax, sizes[ax])
