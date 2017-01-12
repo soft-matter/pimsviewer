@@ -11,9 +11,8 @@ import numpy as np
 import pims
 from pims import FramesSequence, FramesSequenceND, Frame
 
-from pimsviewer.widgets import (CheckBox, DockWidget, VideoTimer, Slider,
-                                QWidgetMinSize)
-from pimsviewer.qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
+from pimsviewer.widgets import CheckBox, DockWidget, VideoTimer, Slider
+from pimsviewer.qt import (Qt, QtWidgets, QtCore, Signal,
                            init_qtapp, start_qtapp, rgb_view)
 from pimsviewer.display import Display, DisplayMPL
 from pimsviewer.utils import (wrap_frames_sequence, recursive_subclasses,
@@ -119,8 +118,8 @@ class Viewer(QtWidgets.QMainWindow):
         self.main_widget = QtWidgets.QWidget(self)
         self.setCentralWidget(self.main_widget)
         self.setMinimumSize(200, 200)
-        self.setSizePolicy(QtGui.QSizePolicy.Preferred,
-                           QtGui.QSizePolicy.Preferred)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
+                           QtWidgets.QSizePolicy.Preferred)
         self.main_layout = QtWidgets.QGridLayout(self.main_widget)
 
         self.setAcceptDrops(True)
@@ -152,7 +151,7 @@ class Viewer(QtWidgets.QMainWindow):
                 cur_dir = os.path.dirname(self.reader.filename)
             except AttributeError:
                 cur_dir = ''
-            filename = QtGui.QFileDialog.getOpenFileName(directory=cur_dir)
+            filename = QtWidgets.QFileDialog.getOpenFileName(directory=cur_dir)
             if isinstance(filename, tuple):
                 # Handle discrepancy between PyQt4 and PySide APIs.
                 filename = filename[0]
@@ -217,8 +216,8 @@ class Viewer(QtWidgets.QMainWindow):
             self.slider_dock = QtWidgets.QDockWidget()
             self.slider_dock.setWidget(slider_widget)
             self.slider_dock.setWindowTitle('Axes sliders')
-            self.slider_dock.setFeatures(QtGui.QDockWidget.DockWidgetFloatable |
-                                         QtGui.QDockWidget.DockWidgetMovable)
+            self.slider_dock.setFeatures(QtWidgets.QDockWidget.DockWidgetFloatable |
+                                         QtWidgets.QDockWidget.DockWidgetMovable)
             self.addDockWidget(Qt.BottomDockWidgetArea, self.slider_dock)
 
         # set playback speed
@@ -259,8 +258,8 @@ class Viewer(QtWidgets.QMainWindow):
             self.renderer.close()
         self.renderer = display_class(self, shape)
 
-        self.renderer.widget.setSizePolicy(QtGui.QSizePolicy.Expanding,
-                                           QtGui.QSizePolicy.Expanding)
+        self.renderer.widget.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                                           QtWidgets.QSizePolicy.Expanding)
         self.renderer.widget.updateGeometry()
         self.main_layout.addWidget(self.renderer.widget, 0, 0)
         self.renderer.widget.keyPressEvent = self.keyPressEvent
@@ -385,8 +384,8 @@ class Viewer(QtWidgets.QMainWindow):
             dock.setWidget(plugin)
             dock.setWindowTitle(plugin.name)
             dock.close_event_signal.connect(plugin.close)
-            dock.setSizePolicy(QtGui.QSizePolicy.Fixed,
-                               QtGui.QSizePolicy.MinimumExpanding)
+            dock.setSizePolicy(QtWidgets.QSizePolicy.Fixed,
+                               QtWidgets.QSizePolicy.MinimumExpanding)
             self.addDockWidget(dock_location, dock)
 
     def __add__(self, plugin):
@@ -571,10 +570,10 @@ class Viewer(QtWidgets.QMainWindow):
                 cur_dir = os.path.dirname(self.reader.filename)
             except AttributeError:
                 cur_dir = ''
-            filename = QtGui.QFileDialog.getSaveFileName(self,
-                                                         "Export Movie",
-                                                         cur_dir,
-                                                         str_filter)
+            filename = QtWidgets.QFileDialog.getSaveFileName(self,
+                                                             "Export Movie",
+                                                             cur_dir,
+                                                             str_filter)
             if isinstance(filename, tuple):
                 # Handle discrepancy between PyQt4 and PySide APIs.
                 filename = filename[0]
@@ -608,7 +607,8 @@ class Viewer(QtWidgets.QMainWindow):
                 self.return_val.append(None)
         if self._close_reader:
             self.close_reader()
-        self.renderer.close()
+        if self.renderer is not None:
+            self.renderer.close()
         super(Viewer, self).closeEvent(event)
 
 
