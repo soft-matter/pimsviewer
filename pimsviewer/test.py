@@ -7,7 +7,6 @@ import os
 import unittest
 import nose
 import numpy as np
-from numpy.testing import (assert_equal, assert_almost_equal, assert_allclose)
 from pimsviewer import Viewer, Slider, PipelinePlugin, AnnotatePlugin, PlottingPlugin
 from pims import FramesSequence, Frame, pipeline
 
@@ -108,14 +107,14 @@ class TestViewer(unittest.TestCase):
            Slider('noise_level', 0, 100, 0, orientation='vertical')
         viewer = Viewer(RandomReader()) + AddNoise
         viewer.show()
-    #
-    # def test_viewer_pipeline_multiple(self):
-    #     AddNoise = PipelinePlugin(add_noise, 'Add noise', dock='right') + \
-    #        Slider('noise_level', 0, 100, 0, orientation='vertical')
-    #     NoRed = PipelinePlugin(no_red, 'No red', dock='left') + \
-    #                    Slider('level', 0, 100, 0, orientation='vertical')
-    #     viewer = Viewer(RandomReader(shape=(128, 128, 3))) + AddNoise + NoRed
-    #     viewer.show()
+
+    def test_viewer_pipeline_multiple(self):
+        AddNoise = PipelinePlugin(add_noise, 'Add noise', dock='right') + \
+           Slider('noise_level', 0, 100, 0, orientation='vertical')
+        NoRed = PipelinePlugin(no_red, 'No red', dock='left') + \
+                       Slider('level', 0, 100, 0, orientation='vertical')
+        viewer = Viewer(RandomReader(shape=(128, 128, 3))) + AddNoise + NoRed
+        viewer.show()
 
     def test_viewer_interactive_plotting(self):
         Locate = PlottingPlugin(tp_locate, 'Locate', dock='right') + \

@@ -36,7 +36,7 @@ class Viewer(QtWidgets.QMainWindow):
 
     Notes
     -----
-    The Viewer was partly based on `skimage.viewer.CollectionViewer`
+    The Viewer was based on `skimage.viewer.CollectionViewer`
     """
     dock_areas = {'top': Qt.TopDockWidgetArea,
                   'bottom': Qt.BottomDockWidgetArea,
@@ -44,10 +44,10 @@ class Viewer(QtWidgets.QMainWindow):
                   'right': Qt.RightDockWidgetArea}
     _dropped = Signal(list)
     image_changed = Signal()
-    undo = Signal()
-    redo = Signal()
+    # undo = Signal()
+    # redo = Signal()
 
-    def __init__(self, reader=None):
+    def __init__(self, reader=None, close_reader=True):
         self.plugins = []
         self._readers = []
         self._img = None
@@ -59,7 +59,7 @@ class Viewer(QtWidgets.QMainWindow):
         self.is_playing = False
         self._index = dict()
         self.return_val = []
-        self._close_reader = True
+        self._close_reader = close_reader
 
         # Start main loop
         init_qtapp()
@@ -67,6 +67,8 @@ class Viewer(QtWidgets.QMainWindow):
 
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setWindowTitle("Python IMage Sequence Viewer")
+
+        # list all pims reader classed in the "Open with" menu
         open_with_menu = QtWidgets.QMenu('Open with', self)
         for cls in set(chain(recursive_subclasses(FramesSequence),
                              recursive_subclasses(FramesSequenceND))):
@@ -93,6 +95,8 @@ class Viewer(QtWidgets.QMainWindow):
                                             checkable=True)
         self._autoscale.toggled.connect(self.update_view)
         self.view_menu.addAction(self._autoscale)
+
+        # list all Display subclasses in the View menu
         for cls in recursive_subclasses(Display):
             if cls.available:
                 self.view_menu.addAction(cls.name,
@@ -132,31 +136,69 @@ class Viewer(QtWidgets.QMainWindow):
                            QtWidgets.QSizePolicy.Preferred)
         self.main_layout = QtWidgets.QGridLayout(self.main_widget)
 
+        # make file dragging & dropping work
         self.setAcceptDrops(True)
         self._dropped.connect(self._open_dropped)
 
         self._status_bar = self.statusBar()
 
+        # initialize the timer for video playback
         self._timer = VideoTimer(self)
+
         if reader is not None:
             self.update_reader(reader)
 
-    def resize_display(self, w=None, h=None, factor=1):
-        h_im, w_im = self.image.shape[-2:]
-        h_im *= factor
-        w_im *= factor
-        if h is None and w is None:
-            h = h_im
-            w = w_im
-        elif h is None:
-            h = int(w * h_im / w_im)
-        elif w is None:
-            w = int(h * w_im / h_im)
-        self.showNormal()  # make sure not to be in maximized mode
-        self.renderer.resize(w, h)
+    def add_plugin(self, plugin):
+        """Add Plugin to the Viewer"""
+        plugin.attach(self)
+
+        if plugin.dock:
+            location = self.dock_areas[plugin.dock]
+            dock_location = Qt.DockWidgetArea(location)
+            dock = DockWidget()
+            dock.setWidget(plugin)
+            dock.setWindowTitle(plugin.name)
+            dock.close_event_signal.connect(plugin.close)
+            dock.setSizePolicy(QtWidgets.QSizePolicy.Fixed,
+                               QtWidgets.QSizePolicy.MinimumExpanding)
+            self.addDockWidget(dock_location, dock)
+
+    def __add__(self, plugin):
+        self.add_plugin(plugin)
+        return self
+
+    def show(self, main_window=True):
+        """Show Viewer and attached ViewerPipelines."""
+        self.move(0, 0)
+        for p in self.plugins:
+            p.show()
+        super(Viewer, self).show()
+        self.activateWindow()
+        self.raise_()
+        if main_window:
+            start_qtapp()
+
+        return self.return_val
+
+    def closeEvent(self, event):
+        for p in self.plugins:
+            if hasattr(p, 'output'):
+                self.return_val.append(p.output())
+                p.close()
+            else:
+                self.return_val.append(None)
+        if self._close_reader:
+            self.close_reader()
+        if self.renderer is not None:
+            self.renderer.close()
+        super(Viewer, self).closeEvent(event)
+
+    # the update cascade: open_file -> update_reader -> update_display ->
+    # update_image -> image -> update_view. Any function calls the next one,
+    # but you can call for instance update_image to only update the image.
 
     def open_file(self, filename=None, reader_cls=None):
-        """Open image file and display in viewer."""
+        """Open image file and update the viewer's reader"""
         if filename is None:
             try:
                 cur_dir = os.path.dirname(self.reader.filename)
@@ -176,13 +218,6 @@ class Viewer(QtWidgets.QMainWindow):
             self.close_reader()
         self.update_reader(reader)
         self.status = 'Opened {}'.format(filename)
-
-    @property
-    def reader(self):
-        if len(self._readers) == 0:
-            return None
-        else:
-            return self._readers[-1]
 
     def update_reader(self, reader):
         """Load a new reader into the Viewer."""
@@ -240,19 +275,6 @@ class Viewer(QtWidgets.QMainWindow):
         self.update_display()
         self.resize_display()
 
-    def close_reader(self):
-        if self.reader is None:
-            return
-        if self.is_playing:
-            self.stop()
-        if self.slider_dock is not None:
-            self.slider_dock.close()
-        if self.channel_tabs is not None:
-            self.channel_tabs.close()
-        self.reader.close()
-        self._readers = []
-        self.renderer.close()
-
     def update_display(self, display_class=None):
         """Change display mode."""
         if display_class is None:
@@ -303,11 +325,14 @@ class Viewer(QtWidgets.QMainWindow):
         self.image = image
 
     @property
-    def autoscale(self):
-        return self._autoscale.isChecked()
-    @autoscale.setter
-    def autoscale(self, value):
-        return self._autoscale.setChecked(value)
+    def image(self):
+        """The image that is being displayed"""
+        return self._img
+
+    @image.setter
+    def image(self, image):
+        self._img = image
+        self.update_view()
 
     def update_view(self):
         """Emit image to display."""
@@ -317,13 +342,17 @@ class Viewer(QtWidgets.QMainWindow):
         self.renderer.image = to_rgb_uint8(self.image, autoscale=self.autoscale)
         self.image_changed.emit()
 
+    # Change the current index
+
     @property
     def index(self):
+        """The current index (dictionary). Setting this has no effect."""
         return self._index.copy()  # copy the dict to make it read only
 
     def set_index(self, value=0, name='t'):
+        """Update the index along a specific axis"""
         if name not in self.reader.sizes:
-            return ValueError("Dimension '{}' not in reader".format(name))
+            return ValueError("Axis '{}' not in reader".format(name))
         # clip value if necessary
         if value < 0:
             value = 0
@@ -339,20 +368,6 @@ class Viewer(QtWidgets.QMainWindow):
         self._index[name] = value
         self.update_image()
 
-    @property
-    def image(self):
-        """The image that is being displayed"""
-        return self._img
-
-    @image.setter
-    def image(self, image):
-        self._img = image
-        self.update_view()
-
-    @property
-    def sizes(self):
-        return self.reader.sizes.copy()
-
     def channel_tab_callback(self, index):
         """Callback function for channel tabs."""
         if index == 0 and self.is_multichannel:
@@ -363,6 +378,45 @@ class Viewer(QtWidgets.QMainWindow):
         if index > 0:  # monochannel: update channel field
             self._index['c'] = index - 1  # because 0 is multichannel
         self.update_image()
+
+    # Access to the reader and its properties
+
+    @property
+    def reader(self):
+        """The current reader"""
+        if len(self._readers) == 0:
+            return None
+        else:
+            return self._readers[-1]
+
+    @property
+    def sizes(self):
+        return self.reader.sizes.copy()
+
+    @property
+    def autoscale(self):
+        return self._autoscale.isChecked()
+
+    @autoscale.setter
+    def autoscale(self, value):
+        return self._autoscale.setChecked(value)
+
+
+    def close_reader(self):
+        """Close the current reader"""
+        if self.reader is None:
+            return
+        if self.is_playing:
+            self.stop()
+        if self.slider_dock is not None:
+            self.slider_dock.close()
+        if self.channel_tabs is not None:
+            self.channel_tabs.close()
+        self.reader.close()
+        self._readers = []
+        self.renderer.close()
+
+    # Video playback
 
     def play_callback(self, name, value):
         """Callback function for play checkbox."""
@@ -399,37 +453,7 @@ class Viewer(QtWidgets.QMainWindow):
         """Stop the movie."""
         self.play(False)
 
-    def add_plugin(self, plugin):
-        """Add Plugin to the Viewer"""
-        plugin.attach(self)
-
-        if plugin.dock:
-            location = self.dock_areas[plugin.dock]
-            dock_location = Qt.DockWidgetArea(location)
-            dock = DockWidget()
-            dock.setWidget(plugin)
-            dock.setWindowTitle(plugin.name)
-            dock.close_event_signal.connect(plugin.close)
-            dock.setSizePolicy(QtWidgets.QSizePolicy.Fixed,
-                               QtWidgets.QSizePolicy.MinimumExpanding)
-            self.addDockWidget(dock_location, dock)
-
-    def __add__(self, plugin):
-        self.add_plugin(plugin)
-        return self
-
-    def show(self, main_window=True):
-        """Show Viewer and attached ViewerPipelines."""
-        self.move(0, 0)
-        for p in self.plugins:
-            p.show()
-        super(Viewer, self).show()
-        self.activateWindow()
-        self.raise_()
-        if main_window:
-            start_qtapp()
-
-        return self.return_val
+    # File drag & drop
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls:
@@ -461,12 +485,22 @@ class Viewer(QtWidgets.QMainWindow):
                 self.open_file(fn)
                 break
 
-    @property
-    def status(self):
-        return None
-    @status.setter
-    def status(self, value):
-        self._status_bar.showMessage(str(value))
+    # Handling user input
+
+    def resize_display(self, w=None, h=None, factor=1):
+        """Resize the image display widget to a certain size or by a factor."""
+        h_im, w_im = self.image.shape[-2:]
+        h_im *= factor
+        w_im *= factor
+        if h is None and w is None:
+            h = h_im
+            w = w_im
+        elif h is None:
+            h = int(w * h_im / w_im)
+        elif w is None:
+            w = int(h * w_im / h_im)
+        self.showNormal()  # make sure not to be in maximized mode
+        self.renderer.resize(w, h)
 
     def keyPressEvent(self, event):
         if type(event) == QtWidgets.QKeyEvent:
@@ -561,6 +595,16 @@ class Viewer(QtWidgets.QMainWindow):
                 new_z = self.reader.sizes['z'] - 1
             self.set_index(new_z, 'z')
 
+    @property
+    def status(self):
+        return None
+
+    @status.setter
+    def status(self, value):
+        self._status_bar.showMessage(str(value))
+
+    # Output data
+
     def to_pixmap(self):
         pixmap = QtWidgets.QPixmap(self.renderer.widget.size())
         self.renderer.widget.render(pixmap)
@@ -616,16 +660,3 @@ class Viewer(QtWidgets.QMainWindow):
         pims.export(self.reader, filename, rate, codec=codec)
         self.update_image()
         self.status = 'Done saving {}'.format(filename)
-
-    def closeEvent(self, event):
-        for p in self.plugins:
-            if hasattr(p, 'output'):
-                self.return_val.append(p.output())
-                p.close()
-            else:
-                self.return_val.append(None)
-        if self._close_reader:
-            self.close_reader()
-        if self.renderer is not None:
-            self.renderer.close()
-        super(Viewer, self).closeEvent(event)
