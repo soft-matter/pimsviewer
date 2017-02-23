@@ -12,7 +12,7 @@ import pims
 from pims import FramesSequence, FramesSequenceND, Frame
 
 from pimsviewer.widgets import CheckBox, DockWidget, VideoTimer, Slider
-from pimsviewer.qt import (Qt, QtWidgets, QtCore, Signal,
+from pimsviewer.qt import (Qt, QtGui, QtWidgets, QtCore, Signal,
                            init_qtapp, start_qtapp, rgb_view)
 from pimsviewer.display import Display, DisplayMPL
 from pimsviewer.utils import (wrap_frames_sequence, recursive_subclasses,
@@ -105,6 +105,16 @@ class Viewer(QtWidgets.QMainWindow):
         resize_menu.addAction('200 %', partial(self.resize_display, factor=2))
         resize_menu.addAction('300 %', partial(self.resize_display, factor=3))
         self.view_menu.addMenu(resize_menu)
+
+        play_menu = QtWidgets.QMenu('&Play', self)
+        def _mult_fps(factor):
+            self.fps *= factor
+        play_menu.addAction('Start / stop', lambda: self.play(not self.is_playing))
+        play_menu.addAction('Switch direction', partial(_mult_fps, factor=-1))
+        play_menu.addAction('Faster', partial(_mult_fps, factor=1.2))
+        play_menu.addAction('Slower', partial(_mult_fps, factor=0.8))
+        self.view_menu.addMenu(play_menu)
+
         self.menuBar().addMenu(self.view_menu)
 
         self.pipeline_menu = QtWidgets.QMenu('&Pipelines', self)
@@ -142,6 +152,7 @@ class Viewer(QtWidgets.QMainWindow):
             h = int(w * h_im / w_im)
         elif w is None:
             w = int(h * w_im / h_im)
+        self.showNormal()  # make sure not to be in maximized mode
         self.renderer.resize(w, h)
 
     def open_file(self, filename=None, reader_cls=None):
@@ -362,16 +373,31 @@ class Viewer(QtWidgets.QMainWindow):
         else:
             self.stop()
 
-    def play(self, fps=None):
-        """Start the movie."""
-        self._timer.start(self._index['t'], self.reader.sizes['t'])
-        self._timer.next_frame.connect(lambda x: self.set_index(x))
-        self.is_playing = True
+    def play(self, start=True, fps=None):
+        """Control movie playback."""
+        if start == self.is_playing:
+            return
+        if start:
+            self._timer.start(self._index['t'], self.reader.sizes['t'])
+            self._timer.next_frame.connect(lambda x: self.set_index(x))
+            if fps is not None:
+                self.fps = fps
+        else:
+            self._timer.stop()
+        self.is_playing = start
+
+    @property
+    def fps(self):
+        return self._timer.fps
+
+    @fps.setter
+    def fps(self, value):
+        if self.is_playing:
+            self._timer.fps = value
 
     def stop(self):
         """Stop the movie."""
-        self._timer.stop()
-        self.is_playing = False
+        self.play(False)
 
     def add_plugin(self, plugin):
         """Add Plugin to the Viewer"""
@@ -443,7 +469,7 @@ class Viewer(QtWidgets.QMainWindow):
         self._status_bar.showMessage(str(value))
 
     def keyPressEvent(self, event):
-        if type(event) == QtWidgets.QKeyEvent:
+        if type(event) == QtGui.QKeyEvent:
             key = event.key()
             modifiers = event.modifiers()
             if key in range(0x30, 0x39 + 1):  # number keys: move to deciles
@@ -485,26 +511,19 @@ class Viewer(QtWidgets.QMainWindow):
                 self.set_index(index)
                 event.accept()
             elif key == Qt.Key_Space:
-                if self.is_playing:
-                    self.stop()
-                else:
-                    self.play()
+                self.play(not self.is_playing)
                 event.accept()
             elif key == Qt.Key_BracketRight:
-                if self.is_playing:
-                    self._timer.fps *= 1.2
+                self.fps *= 1.2
             elif key == Qt.Key_BracketLeft:
-                if self.is_playing:
-                    self._timer.fps *= 0.8
+                self.fps *= 0.8
             elif key == Qt.Key_Backslash:
-                if self.is_playing:
-                    self._timer.fps *= -1
+                self.fps *= -1
             elif key == Qt.Key_Equal:
-                if self.is_playing:
-                    try:
-                        self._timer.fps = self.reader.frame_rate
-                    except AttributeError:
-                        self._timer.fps = 25.
+                try:
+                    self.fps = self.reader.frame_rate
+                except AttributeError:
+                    self.fps = 25.
             elif key == Qt.Key_F:
                 self.renderer.set_fullscreen()
             elif key == Qt.Key_Escape:
