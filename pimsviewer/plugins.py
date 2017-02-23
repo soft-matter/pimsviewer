@@ -184,7 +184,8 @@ class AnnotatePlugin(Plugin):
     name = 'Annotate'
     picking_tolerance = 5
 
-    def __init__(self, features, frame_axes='t'):
+    def __init__(self, features, frame_axes='t', plot_style=None,
+                 text_style=None):
         super(AnnotatePlugin, self).__init__(dock='left')
         self.artist = None
         if features.index.is_unique:
@@ -200,6 +201,14 @@ class AnnotatePlugin(Plugin):
         self._no_click = None
         self._undo = deque([], 10)
         self._redo = deque([], 10)
+
+        self.plot_style = dict(s=200, linewidths=2,
+                               facecolors='none', marker='o')
+        if plot_style is not None:
+            self.plot_style.update(plot_style)
+        self.text_style = dict(usetex=False)
+        if text_style is not None:
+            self.text_style.update(text_style)
 
     def attach(self, viewer):
         super(AnnotatePlugin, self).attach(viewer)
@@ -223,8 +232,6 @@ class AnnotatePlugin(Plugin):
 
     def process(self, *widget_arg):
         frame_no = get_frame_no(self.viewer.index, self._frame_axes)
-        _plot_style = dict(s=200, linewidths=2, facecolors='none', marker='o')
-        _text_style = dict(usetex=False)
         text_offset = 2
         if 'z' in self.viewer.sizes:
             z = self.viewer.index['z'] + 0.5
@@ -260,7 +267,7 @@ class AnnotatePlugin(Plugin):
                                           f_frame['y'] + 0.5,
                                           edgecolors=colors,
                                           picker=self.picking_tolerance,
-                                          **_plot_style)
+                                          **self.plot_style)
             texts = []
             if 'particle' in self.features:
                 for i, color in zip(self.indices, colors):
@@ -272,7 +279,7 @@ class AnnotatePlugin(Plugin):
                     else:
                         texts.append(self.ax.text(x+text_offset, y-text_offset,
                                                   p, color=color,
-                                                  **_text_style))
+                                                  **self.text_style))
             self.artist = [self.artist, texts]
         self.canvas.draw_idle()
 

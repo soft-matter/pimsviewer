@@ -12,7 +12,7 @@ import pims
 from pims import FramesSequence, FramesSequenceND, Frame
 
 from pimsviewer.widgets import CheckBox, DockWidget, VideoTimer, Slider
-from pimsviewer.qt import (Qt, QtGui, QtWidgets, QtCore, Signal,
+from pimsviewer.qt import (Qt, QtWidgets, QtCore, Signal,
                            init_qtapp, start_qtapp, rgb_view)
 from pimsviewer.display import Display, DisplayMPL
 from pimsviewer.utils import (wrap_frames_sequence, recursive_subclasses,
@@ -469,7 +469,7 @@ class Viewer(QtWidgets.QMainWindow):
         self._status_bar.showMessage(str(value))
 
     def keyPressEvent(self, event):
-        if type(event) == QtGui.QKeyEvent:
+        if type(event) == QtWidgets.QKeyEvent:
             key = event.key()
             modifiers = event.modifiers()
             if key in range(0x30, 0x39 + 1):  # number keys: move to deciles
@@ -626,7 +626,8 @@ class Viewer(QtWidgets.QMainWindow):
                 self.return_val.append(None)
         if self._close_reader:
             self.close_reader()
-        self.renderer.close()
+        if self.renderer is not None:
+            self.renderer.close()
         super(Viewer, self).closeEvent(event)
 
 
