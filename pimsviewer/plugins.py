@@ -2,10 +2,10 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import numpy as np
-from pimsviewer.widgets import Text
-from pimsviewer.viewer import Plugin
-from pimsviewer.display import DisplayMPL
-from pimsviewer.utils import df_add_row
+from .widgets import Text
+from .display import DisplayMPL
+from .utils import df_add_row
+from .qt import QtWidgets, QtCore, init_qtapp
 from collections import deque
 
 
@@ -26,6 +26,69 @@ def get_frame_no(indices, frame_axes):
         frame_no += iter_size * coord
         iter_size *= coord
     return frame_no
+
+
+class Plugin(QtWidgets.QDialog):
+    def __init__(self, height=0, width=400, dock='bottom'):
+        init_qtapp()
+        super(Plugin, self).__init__()
+
+        self.dock = dock
+
+        self.viewer = None
+
+        self.setWindowTitle(self.name)
+        self.layout = QtWidgets.QGridLayout(self)
+        self.resize(width, height)
+        self.row = 0
+
+        self.arguments = []
+        self.keyword_arguments = {}
+
+    def attach(self, viewer):
+        """Attach the Plugin to a Viewer."""
+        self.setParent(viewer)
+        self.setWindowFlags(QtCore.Qt.Dialog)
+        self.viewer = viewer
+        self.viewer.plugins.append(self)
+
+    def add_widget(self, widget):
+        """Add widget to pipeline.
+
+        Alternatively, you can use simple addition to add widgets:
+
+            plugin += Slider('param_name', low=0, high=100)
+
+        Widgets can adjust arguments of the pipeline function, as specified by
+        the Widget's `ptype`.
+        """
+        if widget.ptype == 'kwarg':
+            name = widget.name.replace(' ', '_')
+            self.keyword_arguments[name] = widget
+            widget.callback = self.process
+        elif widget.ptype == 'arg':
+            self.arguments.append(widget)
+            widget.callback = self.process
+        widget.plugin = self
+        self.layout.addWidget(widget, self.row, 0)
+        self.row += 1
+
+    def __add__(self, widget):
+        self.add_widget(widget)
+        return self
+
+    def process(self, *widget_arg):
+        pass
+
+    def _get_value(self, param):
+        # If param is a widget, return its `val` attribute.
+        return param if not hasattr(param, 'val') else param.val
+
+    def show(self, main_window=True):
+        """Show plugin."""
+        super(Plugin, self).show()
+        self.activateWindow()
+        self.raise_()
 
 
 class PipelinePlugin(Plugin):
@@ -51,7 +114,7 @@ class PipelinePlugin(Plugin):
     Examples
     --------
     >>> import numpy as np
-    >>> from pims.viewer import Viewer, ViewerPipeline, Slider
+    >>> from pimsviewer import Viewer, PipelinePlugin, Slider
     >>>
     >>> def add_noise(img, noise_level):
     >>>     return img + np.random.random(img.shape) * noise_level
@@ -181,34 +244,30 @@ class PlottingPlugin(Plugin):
 
 
 class AnnotatePlugin(Plugin):
-    name = 'Annotate'
-    picking_tolerance = 5
-
+    name = 'Annotate Features'
     def __init__(self, features, frame_axes='t', plot_style=None,
-                 text_style=None):
+                 text_style=None, picking_tolerance=5):
         super(AnnotatePlugin, self).__init__(dock='left')
         self.artist = None
         if features.index.is_unique:
             self.features = features.copy()
         else:
             self.features = features.reset_index(inplace=False, drop=True)
-        if 'hide' not in self.features:
-            self.features['hide'] = False
-        self._selected = None
-        self.dragging = False
-        self._frame_axes = frame_axes
+
         self._no_pick = None
         self._no_click = None
-        self._undo = deque([], 10)
-        self._redo = deque([], 10)
-
-        self.plot_style = dict(s=200, linewidths=2,
+        self._selected = None
+        self._frame_axes = frame_axes
+        self.plot_style = dict(s=200, linewidths=2, edgecolors='r',
                                facecolors='none', marker='o')
         if plot_style is not None:
             self.plot_style.update(plot_style)
-        self.text_style = dict(usetex=False)
+        # disable tex
+        self.text_style = dict(usetex=False, color='r')
         if text_style is not None:
             self.text_style.update(text_style)
+
+        self.picking_tolerance = picking_tolerance
 
     def attach(self, viewer):
         super(AnnotatePlugin, self).attach(viewer)
@@ -220,15 +279,95 @@ class AnnotatePlugin(Plugin):
         self.canvas = viewer.renderer.widget
 
         self.viewer.image_changed.connect(self.process)
-        self.viewer.undo.connect(self.undo)
-        self.viewer.redo.connect(self.redo)
         self.canvas.mpl_connect('pick_event', self.on_pick)
-        self.canvas.mpl_connect('button_press_event', self.on_press)
-        self.canvas.mpl_connect('button_release_event', self.on_release)
 
         self._out = Text()
         self.add_widget(self._out)
         self.process()
+
+    def process(self, *widget_arg):
+        frame_no = get_frame_no(self.viewer.index, self._frame_axes)
+        text_offset = 2
+        if 'z' in self.viewer.sizes:
+            z = self.viewer.index['z'] + 0.5
+            f_frame = self.features[(self.features['frame'] == frame_no) &
+                                    (np.abs(self.features['z'] - z) <= 0.5)]
+        else:
+            f_frame = self.features[self.features['frame'] == frame_no]
+        f_frame = f_frame[~np.isnan(f_frame[['x', 'y']]).any(1)].copy()
+        self.indices = f_frame.index
+        if self.artist is not None:
+            remove_artists(self.artist)
+        if len(f_frame) == 0:
+            self.artist = None
+        else:
+            self.artist = self.ax.scatter(f_frame['x'] + 0.5,
+                                          f_frame['y'] + 0.5,
+                                          picker=self.picking_tolerance,
+                                          **self.plot_style)
+            texts = []
+            if 'particle' in self.features:
+                for i in self.indices:
+                    x, y, p = self.features.loc[i, ['x', 'y', 'particle']]
+                    try:
+                        p = str(int(p))
+                    except ValueError:
+                        pass
+                    else:
+                        texts.append(self.ax.text(x+text_offset, y-text_offset,
+                                                  p, **self.text_style))
+            self.artist = [self.artist, texts]
+        self.canvas.draw_idle()
+
+    @property
+    def selected(self):
+        return self._selected
+
+    @selected.setter
+    def selected(self, value):
+        self._selected = value
+        if value is None:
+            msg = ""
+        else:
+            msg = 'index     {}\n'.format(int(value)) + \
+                  self.features.loc[value].to_string()
+        self._out.text = msg
+
+    def on_pick(self, event):
+        if event.mouseevent is self._no_pick:
+            return
+        self._no_click = event.mouseevent  # no click events
+        index = self.indices[event.ind[0]]
+        button = event.mouseevent.button
+        dblclick = event.mouseevent.dblclick
+        if button == 1 and not dblclick:  # left mouse: select
+            if self.selected is None:
+                self.selected = index
+            else:
+                self.selected = None
+            self._no_click = event.mouseevent
+            self.process()
+
+
+class SelectionPlugin(AnnotatePlugin):
+    name = 'Select Features'
+
+    def __init__(self, features, frame_axes='t', plot_style=None,
+                 text_style=None, picking_tolerance=5):
+        super(SelectionPlugin, self).__init__(features, frame_axes,
+                                              plot_style, text_style,
+                                              picking_tolerance)
+        if 'hide' not in self.features:
+            self.features['hide'] = False
+        self.dragging = False
+
+        self._undo = deque([], 10)
+        self._redo = deque([], 10)
+
+        if 'edgecolors' in self.plot_style:
+            del self.plot_style['edgecolors']
+        if 'color' in self.text_style:
+            del self.text_style['color']
 
     def process(self, *widget_arg):
         frame_no = get_frame_no(self.viewer.index, self._frame_axes)
@@ -257,10 +396,6 @@ class AnnotatePlugin(Plugin):
                     colors.append('yellow')
                 elif f_frame.loc[i, 'hide']:
                     colors.append('grey')
-                elif 'gaussian' not in f_frame:
-                    colors.append('red')
-                elif f_frame.loc[i, 'gaussian']:
-                    colors.append('blue')
                 else:
                     colors.append('red')
             self.artist = self.ax.scatter(f_frame['x'] + 0.5,
@@ -282,6 +417,12 @@ class AnnotatePlugin(Plugin):
                                                   **self.text_style))
             self.artist = [self.artist, texts]
         self.canvas.draw_idle()
+
+    def attach(self, viewer):
+        super(SelectionPlugin, self).attach(viewer)
+
+        self.canvas.mpl_connect('button_press_event', self.on_press)
+        self.canvas.mpl_connect('button_release_event', self.on_release)
 
     def output(self):
         return self.features

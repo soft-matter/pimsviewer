@@ -11,11 +11,11 @@ import numpy as np
 import pims
 from pims import FramesSequence, FramesSequenceND, Frame
 
-from pimsviewer.widgets import CheckBox, DockWidget, VideoTimer, Slider
-from pimsviewer.qt import (Qt, QtWidgets, QtCore, Signal,
+from .widgets import CheckBox, DockWidget, VideoTimer, Slider
+from .qt import (Qt, QtWidgets, QtCore, Signal,
                            init_qtapp, start_qtapp, rgb_view)
-from pimsviewer.display import Display, DisplayMPL
-from pimsviewer.utils import (wrap_frames_sequence, recursive_subclasses,
+from .display import Display, DisplayMPL
+from .utils import (wrap_frames_sequence, recursive_subclasses,
                               to_rgb_uint8)
 
 try:
@@ -629,67 +629,3 @@ class Viewer(QtWidgets.QMainWindow):
         if self.renderer is not None:
             self.renderer.close()
         super(Viewer, self).closeEvent(event)
-
-
-class Plugin(QtWidgets.QDialog):
-    def __init__(self, height=0, width=400, dock='bottom'):
-        init_qtapp()
-        super(Plugin, self).__init__()
-
-        self.dock = dock
-
-        self.viewer = None
-
-        self.setWindowTitle(self.name)
-        self.layout = QtWidgets.QGridLayout(self)
-        self.resize(width, height)
-        self.row = 0
-
-        self.arguments = []
-        self.keyword_arguments = {}
-
-    def attach(self, viewer):
-        """Attach the Plugin to a Viewer."""
-        self.setParent(viewer)
-        self.setWindowFlags(QtCore.Qt.Dialog)
-        self.viewer = viewer
-        self.viewer.plugins.append(self)
-
-    def add_widget(self, widget):
-        """Add widget to pipeline.
-
-        Alternatively, you can use simple addition to add widgets:
-
-            plugin += Slider('param_name', low=0, high=100)
-
-        Widgets can adjust arguments of the pipeline function, as specified by
-        the Widget's `ptype`.
-        """
-        if widget.ptype == 'kwarg':
-            name = widget.name.replace(' ', '_')
-            self.keyword_arguments[name] = widget
-            widget.callback = self.process
-        elif widget.ptype == 'arg':
-            self.arguments.append(widget)
-            widget.callback = self.process
-        widget.plugin = self
-        self.layout.addWidget(widget, self.row, 0)
-        self.row += 1
-
-    def __add__(self, widget):
-        self.add_widget(widget)
-        return self
-
-    def process(self, *widget_arg):
-        pass
-
-    def _get_value(self, param):
-        # If param is a widget, return its `val` attribute.
-        return param if not hasattr(param, 'val') else param.val
-
-    def show(self, main_window=True):
-        """Show plugin."""
-        super(Plugin, self).show()
-        self.activateWindow()
-        self.raise_()
-

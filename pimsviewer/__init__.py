@@ -1,5 +1,6 @@
 from .viewer import Viewer
-from .plugins import Plugin, PipelinePlugin, PlottingPlugin, AnnotatePlugin
+from .plugins import (Plugin, PipelinePlugin, PlottingPlugin, AnnotatePlugin,
+                      SelectionPlugin)
 from .widgets import Button, Slider, CheckBox
 
 try:
