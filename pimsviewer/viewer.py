@@ -12,8 +12,8 @@ import pims
 from pims import FramesSequence, FramesSequenceND, Frame
 
 from .widgets import CheckBox, DockWidget, VideoTimer, Slider
-from .qt import (Qt, QtWidgets, QtCore, Signal,
-                           init_qtapp, start_qtapp, rgb_view)
+from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
+                 init_qtapp, start_qtapp, rgb_view)
 from .display import Display, DisplayMPL
 from .utils import (wrap_frames_sequence, recursive_subclasses,
                               to_rgb_uint8)
@@ -349,6 +349,18 @@ class Viewer(QtWidgets.QMainWindow):
         """The current index (dictionary). Setting this has no effect."""
         return self._index.copy()  # copy the dict to make it read only
 
+
+    def _set_index(self, value, name):
+        """Set the index without checks. Mainly for timer callback."""
+        try:
+            if self._index[name] == value:
+                return  # do nothing when no coordinate was changed
+        except KeyError:
+            pass  # but continue when a coordinate did not exist
+        self._index[name] = value
+        self.update_image()
+
+
     def set_index(self, value=0, name='t'):
         """Update the index along a specific axis"""
         if name not in self.reader.sizes:
@@ -358,15 +370,10 @@ class Viewer(QtWidgets.QMainWindow):
             value = 0
         elif value >= self.reader.sizes[name]:
             value = self.reader.sizes[name] - 1
-        try:
-            if self._index[name] == value:
-                return  # do nothing when no coordinate was changed
-        except KeyError:
-            pass  # but continue when a coordinate did not exist
         if self.is_playing and name == 't':
             self._timer.reset(value)
-        self._index[name] = value
-        self.update_image()
+        self._set_index(value, name)
+
 
     def channel_tab_callback(self, index):
         """Callback function for channel tabs."""
@@ -433,7 +440,7 @@ class Viewer(QtWidgets.QMainWindow):
             return
         if start:
             self._timer.start(self._index['t'], self.reader.sizes['t'])
-            self._timer.next_frame.connect(lambda x: self.set_index(x))
+            self._timer.next_frame.connect(lambda x: self._set_index(x, 't'))
             if fps is not None:
                 self.fps = fps
         else:
@@ -503,11 +510,12 @@ class Viewer(QtWidgets.QMainWindow):
         self.renderer.resize(w, h)
 
     def keyPressEvent(self, event):
-        if type(event) == QtWidgets.QKeyEvent:
+        if type(event) == QtGui.QKeyEvent:
             key = event.key()
             modifiers = event.modifiers()
             if key in range(0x30, 0x39 + 1):  # number keys: move to deciles
-                self.set_index(int(self.reader.sizes['t'] * (key - 48) / 10))
+                index = int(self.reader.sizes['t'] * (key - 48) / 10)
+                self.set_index(index, 't')
             if key in range(0x01000037,       # F8-F12 keys: change channel
                             0x0100003b + 1) and 'c' in self.reader.sizes:
                 index = key - 0x01000037
@@ -542,7 +550,7 @@ class Viewer(QtWidgets.QMainWindow):
                 event.accept()
             elif key == Qt.Key_R:
                 index = np.random.randint(0, self.reader.sizes['t'] - 1)
-                self.set_index(index)
+                self.set_index(index, 't')
                 event.accept()
             elif key == Qt.Key_Space:
                 self.play(not self.is_playing)
@@ -589,10 +597,6 @@ class Viewer(QtWidgets.QMainWindow):
     def wheelEvent(self, event):
         if 'z' in self._index:
             new_z = self._index['z'] + int(event.delta() // 120)
-            if new_z < 0:
-                new_z = 0
-            if new_z >= self.reader.sizes['z'] - 1:
-                new_z = self.reader.sizes['z'] - 1
             self.set_index(new_z, 'z')
 
     @property
