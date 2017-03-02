@@ -1,107 +1,18 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import six
-from six import with_metaclass
-from abc import ABCMeta, abstractmethod, abstractproperty
 
 import numpy as np
-from pimsviewer.qt import (Qt, QtGui, QtCore, QtWidgets, FigureCanvasQTAgg,
-                           array2qimage, has_qimage2ndarray)
+from pimsviewer.qt import Qt, FigureCanvasQTAgg
 
-try:
-    import matplotlib as mpl
-    import matplotlib.pyplot as plt
-    has_matplotlib = True
-except ImportError:
-    has_matplotlib = False
-
-try:
-    import pyqtgraph
-    if ((QtCore.PYQT_VERSION_STR == pyqtgraph.Qt.QtCore.PYQT_VERSION_STR) and
-        (QtCore.QT_VERSION_STR == pyqtgraph.Qt.QtCore.QT_VERSION_STR)):
-        from pyqtgraph.opengl import GLViewWidget, GLVolumeItem, GLBoxItem
-        has_pyqtgraph = True
-    else:
-        has_pyqtgraph = False
-except ImportError:
-    has_pyqtgraph = False
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 
 
-class Display(with_metaclass(ABCMeta, object)):
-    name = 'base_class'
-    ndim = 2
-    available = False
-    @abstractproperty
-    def widget(self):
-        pass
-
-    @abstractmethod
-    def close(self):
-        pass
-
-    @property
-    def image(self):
-        return self._image
-
-    @image.setter
-    def image(self, value):
-        self.update_image(value)
-        self._image = value
-
-    @abstractmethod
-    def update_image(self, value):
-        pass
-
-    def resize(self, w, h):
-        self.set_fullscreen(False)
-        self.widget.resize(w, h)
-        self.widget.updateGeometry()
-        self.viewer.main_widget.adjustSize()
-        self.viewer.main_widget.updateGeometry()
-        self.viewer.adjustSize()
-
-    def set_fullscreen(self, value=None):
-        is_fullscreen = self.widget.isFullScreen()
-        if value is None:
-            value = not is_fullscreen
-        elif value == is_fullscreen:
-            return
-        if value:
-            self.widget.setWindowFlags(Qt.Window)
-            self.widget.setWindowState(Qt.WindowFullScreen)
-            self.widget.show()
-        else:
-            self.widget.setWindowState(Qt.WindowNoState)
-            self.widget.setWindowFlags(Qt.Widget)
-            self.widget.show()
-
-
-class DisplayQt(Display):
-    name = 'Qt'
-    ndim = 2
-    available = has_qimage2ndarray
-    def __init__(self, viewer, shape):
-        self.viewer = viewer
-        self._widget = QtWidgets.QLabel()
-        self._widget.setBackgroundRole(QtGui.QPalette.Base)
-        self._widget.setScaledContents(True)
-        self._widget.updateGeometry()
-
-    def update_image(self, value):
-        self._widget.setPixmap(QtGui.QPixmap.fromImage(array2qimage(value)))
-
-    @property
-    def widget(self):
-        return self._widget
-
-    def close(self):
-        self._widget.close()
-
-
-class DisplayMPL(Display):
+class Display(object):
     name = 'Matplotlib'
     ndim = 2
-    available = has_matplotlib
+    available = True
 
     def __init__(self, viewer, shape):
         scale = 1
@@ -136,8 +47,11 @@ class DisplayMPL(Display):
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
-        self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
-        self.fig.canvas.mpl_connect('key_release_event', self.on_key_release)
+        self.canvas.mpl_connect('key_press_event', self.on_key_press)
+        self.canvas.mpl_connect('key_release_event', self.on_key_release)
+
+        self.canvas.setFocusPolicy(Qt.ClickFocus)
+        self.canvas.setFocus()
         self.control_is_held = False
 
     def redraw(self):
@@ -154,6 +68,29 @@ class DisplayMPL(Display):
     def close(self):
         plt.close(self.fig)
         self.canvas.close()
+
+    def resize(self, w, h):
+        self.set_fullscreen(False)
+        self.canvas.resize(w, h)
+        self.canvas.updateGeometry()
+        self.viewer.main_widget.adjustSize()
+        self.viewer.main_widget.updateGeometry()
+        self.viewer.adjustSize()
+
+    def set_fullscreen(self, value=None):
+        is_fullscreen = self.canvas.isFullScreen()
+        if value is None:
+            value = not is_fullscreen
+        elif value == is_fullscreen:
+            return
+        if value:
+            self.canvas.setWindowFlags(Qt.Window)
+            self.canvas.setWindowState(Qt.WindowFullScreen)
+            self.canvas.show()
+        else:
+            self.canvas.setWindowState(Qt.WindowNoState)
+            self.canvas.setWindowFlags(Qt.Widget)
+            self.canvas.show()
 
     def zoom(self, step=None, center=None):
         # get the current x and y limits
@@ -270,69 +207,11 @@ class DisplayMPL(Display):
             self.control_is_held = False
 
 
-class DisplayMPL_mip(DisplayMPL):
-    name = 'Matplotlib (MIP)'
+class Display_MIP(Display):
+    name = 'Max intensity projection'
     ndim = 3
-    available = has_matplotlib
     def __init__(self, viewer, shape):
-        super(DisplayMPL_mip, self).__init__(viewer, shape[1:])
+        super(Display_MIP, self).__init__(viewer, shape[1:])
 
     def update_image(self, image):
-        super(DisplayMPL_mip, self).update_image(image.max(0))
-
-
-class DisplayVolume(Display):
-    name = 'OpenGL 3D'
-    ndim = 3
-    available = has_pyqtgraph
-
-    def __init__(self, viewer, shape):
-        if len(shape) != 3:
-            raise ValueError('Invalid image dimensionality')
-        self.viewer = viewer
-        self.shape = shape
-
-        # try to readout calibration
-        reader = self.viewer.reader
-        try:
-            mpp = reader.calibration
-        except AttributeError:
-            mpp = 1
-        if mpp is None:
-            mpp = 1
-        try:
-            mppZ = reader.calibrationZ
-        except AttributeError:
-            mppZ = mpp
-        shape_um = (self.shape[2] * mpp, self.shape[1] * mpp,
-                    self.shape[0] * mppZ)
-
-        self._widget = GLViewWidget()
-        self.volume = GLVolumeItem(np.zeros(tuple(self.shape[-1:-4:-1]) + (4,),
-                                            dtype=np.ubyte))
-        # set aspect ratio and reverse y axis
-        self.volume.scale(mpp, -mpp, mppZ)
-        self.volume.translate(0, shape_um[1], 0)
-        self.widget.addItem(self.volume)
-
-        self.box = GLBoxItem(color=(255, 255, 255))
-        self.box.setSize(*shape_um)
-        self.widget.addItem(self.box)
-
-        self.widget.setCameraPosition(azimuth=-45, elevation=30,
-                                     distance=max(shape) * 1.5)
-        self.widget.pan(*[s / 2 for s in shape_um], relative=False)
-
-    def update_image(self, image):
-        assert all([im == s for (im, s) in zip(image.shape[:3], self.shape)])
-        new_image = np.empty(tuple(self.shape[-1:-4:-1]) + (4,), dtype=np.ubyte)
-        new_image[:, :, :, :3] = image.transpose([2, 1, 0, 3])
-        new_image[:, :, :, 3] = np.mean(image, axis=3).T
-        self.volume.setData(new_image)
-
-    def close(self):
-        self.widget.close()
-
-    @property
-    def widget(self):
-        return self._widget
+        super(Display_MIP, self).update_image(image.max(0))

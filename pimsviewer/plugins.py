@@ -3,7 +3,6 @@ from __future__ import (absolute_import, division, print_function,
 
 import numpy as np
 from .widgets import Text
-from .display import DisplayMPL
 from .utils import df_add_row
 from .qt import QtWidgets, QtCore, init_qtapp
 from collections import deque
@@ -222,12 +221,9 @@ class PlottingPlugin(Plugin):
     def attach(self, viewer):
         super(PlottingPlugin, self).attach(viewer)
 
-        if type(viewer.renderer) is not DisplayMPL:
-            viewer.update_display(DisplayMPL)
-
-        self.fig = viewer.renderer.fig
-        self.ax = viewer.renderer.ax
-        self.canvas = viewer.renderer.widget
+        self.fig = viewer.fig
+        self.ax = viewer.ax
+        self.canvas = viewer.canvas
 
         self.viewer.image_changed.connect(self.process)
 
@@ -272,12 +268,10 @@ class AnnotatePlugin(Plugin):
 
     def attach(self, viewer):
         super(AnnotatePlugin, self).attach(viewer)
-        if type(viewer.renderer) is not DisplayMPL:
-            viewer.update_display(DisplayMPL)
 
-        self.fig = viewer.renderer.fig
-        self.ax = viewer.renderer.ax
-        self.canvas = viewer.renderer.widget
+        self.fig = viewer.fig
+        self.ax = viewer.ax
+        self.canvas = viewer.canvas
 
         self.viewer.image_changed.connect(self.process)
         self.canvas.mpl_connect('pick_event', self.on_pick)
