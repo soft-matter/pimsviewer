@@ -79,6 +79,9 @@ class Plugin(QtWidgets.QDialog):
     def process(self, *widget_arg):
         pass
 
+    def process_image(self, image):
+        return image
+
     def _get_value(self, param):
         # If param is a widget, return its `val` attribute.
         return param if not hasattr(param, 'val') else param.val
@@ -90,16 +93,16 @@ class Plugin(QtWidgets.QDialog):
         self.raise_()
 
 
-class PipelinePlugin(Plugin):
+class ProcessPlugin(Plugin):
     """Base class for viewing the result of image processing inside the Viewer.
 
-    The PipelinePlugin class connects an image filter (or another function) to
+    The ProcessPlugin class connects an image filter (or another function) to
     the Viewer. The Viewer returns a reader object that has the function applied
     with parameters set inside the Viewer.
 
     Parameters
     ----------
-    pipeline_func : function
+    fuunc : function
         Function that processes the image. It should not change the image shape.
     name : string
         Name of pipeline. This is displayed as the window title.
@@ -113,28 +116,28 @@ class PipelinePlugin(Plugin):
     Examples
     --------
     >>> import numpy as np
-    >>> from pimsviewer import Viewer, PipelinePlugin, Slider
+    >>> from pimsviewer import Viewer, ProcessPlugin, Slider
     >>>
     >>> def add_noise(img, noise_level):
     >>>     return img + np.random.random(img.shape) * noise_level
     >>>
     >>> image_reader = np.zeros((1, 512, 512), dtype=np.uint8)
     >>>
-    >>> AddNoise = PipelinePlugin(add_noise) + Slider('noise_level', 0, 100, 0)
+    >>> AddNoise = ProcessPlugin(add_noise) + Slider('noise_level', 0, 100, 0)
     >>> viewer = Viewer(image_reader)
     >>> viewer += AddNoise
     >>> original, noise_added = viewer.show()
     """
-    def __init__(self, pipeline_func, name=None, height=0, width=400,
+    def __init__(self, func, name=None, height=0, width=400,
                  dock='bottom'):
-        self.pipeline_func = pipeline_func
+        self.func = func
 
         if name is None:
-            self.name = pipeline_func.__name__
+            self.name = func.__name__
         else:
             self.name = name
 
-        super(PipelinePlugin, self).__init__(height, width, dock)
+        super(ProcessPlugin, self).__init__(height, width, dock)
 
 
     def attach(self, viewer):
@@ -148,58 +151,30 @@ class PipelinePlugin(Plugin):
         Also note that `attach` automatically calls the filter function so that
         the image matches the filtered value specified by attached widgets.
         """
-        super(PipelinePlugin, self).attach(viewer)
-        self.viewer._readers += [None]
-        self.reader_index = len(self.viewer._readers) - 1
-        self.viewer._readers[self.reader_index] = self.viewer._readers[self.reader_index - 1]
-
+        super(ProcessPlugin, self).attach(viewer)
         self.process()
 
-    def _process(self):
+    def process(self, *widget_arg):
+        """Notify the viewer that the processing function has been changed. """
+        self.viewer.update_processed_image(self)
+
+    def process_image(self, image):
         kwargs = dict([(name, self._get_value(a))
                        for name, a in self.keyword_arguments.items()])
-        self.viewer._readers[self.reader_index] = \
-            self.pipeline_func(self.viewer._readers[self.reader_index - 1],
-                               *self.arguments, **kwargs)
-
-    def process(self, *widget_arg):
-        """Send the changed pipeline function to the Viewer. """
-        # `widget_arg` is passed by the active widget but is unused since all
-        # filter arguments are pulled directly from attached the widgets.
-        to_process = [None] * (len(self.viewer._readers) - self.reader_index)
-        for plugin in self.viewer.plugins:
-            try:
-                if plugin.reader_index >= self.reader_index:
-                    to_process[plugin.reader_index - self.reader_index] = plugin
-            except AttributeError:
-                pass  # no pipeline_index
-        for plugin in to_process:
-            plugin._process()
-        self.viewer.update_image()
+        return self.func(image, *self.arguments, **kwargs)
 
     def close(self):
         """Close the plugin and clean up."""
         if self in self.viewer.plugins:
             self.viewer.plugins.remove(self)
 
-        # delete the pipeline
-        if self.reader_index is not None:
-            del self.viewer._readers[self.reader_index]
-        # decrease pipeline_index for the other pipelines
-        for plugin in self.viewer.plugins:
-            try:
-                if plugin.reader_index > self.reader_index:
-                    plugin.reader_index -= 1
-            except AttributeError:
-                pass  # no pipeline_index
+        self.viewer.update_processed_image()
 
-        self.viewer.update_view()
-
-        super(PipelinePlugin, self).close()
+        super(ProcessPlugin, self).close()
 
     def output(self):
-        self.viewer._close_reader = False
-        return self.viewer._readers[self.reader_index]
+        return dict([(name, self._get_value(a))
+                    for name, a in self.keyword_arguments.items()])
 
 
 class PlottingPlugin(Plugin):
@@ -222,7 +197,7 @@ class PlottingPlugin(Plugin):
         self.ax = viewer.ax
         self.canvas = viewer.canvas
 
-        self.viewer.image_changed.connect(self.process)
+        self.viewer.original_image_changed.connect(self.process)
 
         self.process()
 
@@ -238,9 +213,11 @@ class PlottingPlugin(Plugin):
 
 class AnnotatePlugin(Plugin):
     name = 'Annotate Features'
+    default_msg = 'Click a particle to display its properties.\n'
+
     def __init__(self, features, frame_axes='t', plot_style=None,
                  text_style=None, picking_tolerance=5, z_width=0.5):
-        super(AnnotatePlugin, self).__init__(dock='left')
+        super(AnnotatePlugin, self).__init__(dock=False)
         self.artist = None
         if features.index.is_unique:
             self.features = features.copy()
@@ -270,7 +247,7 @@ class AnnotatePlugin(Plugin):
         self.ax = viewer.ax
         self.canvas = viewer.canvas
 
-        self.viewer.image_changed.connect(self.process)
+        self.viewer.original_image_changed.connect(self.process)
         self.canvas.mpl_connect('pick_event', self.on_pick)
 
         self._out = Text()
@@ -319,7 +296,7 @@ class AnnotatePlugin(Plugin):
     def selected(self, value):
         self._selected = value
         if value is None:
-            msg = ""
+            msg = self.default_msg
         else:
             msg = 'index     {}\n'.format(int(value)) + \
                   self.features.loc[value].to_string()
@@ -343,6 +320,11 @@ class AnnotatePlugin(Plugin):
 
 class SelectionPlugin(AnnotatePlugin):
     name = 'Select Features'
+    default_msg = 'Click a particle to display its properties.\n' \
+                  'Rightclick to hide/unhide\n' \
+                  'Select and drag with middle mouse to move\n' \
+                  'Select and double click with right mouse to hide the full trajectory\n' \
+                  'Double click with right mouse to add\n'
 
     def __init__(self, *args, **kwargs):
         super(SelectionPlugin, self).__init__(*args, **kwargs)
@@ -435,19 +417,6 @@ class SelectionPlugin(AnnotatePlugin):
         self._undo.append(self.features)
         self.features = self._redo.pop()
         self.process()
-
-    @property
-    def selected(self):
-        return self._selected
-    @selected.setter
-    def selected(self, value):
-        self._selected = value
-        if value is None:
-            msg = ""
-        else:
-            msg = 'index     {}\n'.format(int(value)) + \
-                  self.features.loc[value].to_string()
-        self._out.text = msg
 
     def on_pick(self, event):
         if event.mouseevent is self._no_pick:

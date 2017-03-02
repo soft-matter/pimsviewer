@@ -30,17 +30,18 @@ to an image. The amount of noise is tunable with a slider, which is displayed
 on the right of the image window.
 
 ```
-from pims import pipeline, open
-from pimsviewer import Viewer, PipelinePlugin, Slider
+import numpy as np
+import pims
+from pimsviewer import Viewer, ProcessPlugin, Slider
 
 reader = pims.open('path/to/file')
 
-@pipeline
 def add_noise(img, noise_level):
-    return img + (np.random.random(img.shape) * noise_level).astype(img.dtype)
+    return img + np.random.random(img.shape) * noise_level / 100 * img.max()
 
-AddNoise = PipelinePlugin(add_noise, 'Add noise', dock='right')
-AddNoise += Slider('noise_level', 0, 100, 0, orientation='vertical')
+AddNoise = ProcessPlugin(add_noise, 'Add noise', dock='right')
+AddNoise += Slider('noise_level', low=0, high=100, value=10,
+                   orientation='vertical')
 viewer = Viewer(reader) + AddNoise
 viewer.show()
 ```
@@ -75,10 +76,11 @@ This dynamically shows the effect of `tp.locate`.
 
 ```
 import trackpy as tp
-from pimsviewer import Viewer, AnnotatePlugin
+from pimsviewer import Viewer, Slider, PlottingPlugin
 
 def locate_and_plot(image, radius, minmass, separation, ax):
-    f = tp.locate(image, radius * 2 + 1, minmass, None, separation, noise_size)
+    f = tp.locate(image, diameter=radius * 2 + 1, minmass=minmass,
+                  separation=separation)
     if len(f) == 0:
         return
     return ax.plot(f['x'], f['y'], markersize=15, markeredgewidth=2,
@@ -87,8 +89,8 @@ def locate_and_plot(image, radius, minmass, separation, ax):
 
 reader = pims.open('path/to/file')
 Locate = PlottingPlugin(locate_and_plot, 'Locate', dock='right')
-Locate += Slider('radius', 1, 20, 7, value_type='int', orientation='vertical')
-Locate += Slider('separation', 1, 20, 7, value_type='float', orientation='vertical')
+Locate += Slider('radius', 2, 20, 7, value_type='int', orientation='vertical')
+Locate += Slider('separation', 1, 100, 7, value_type='float', orientation='vertical')
 Locate += Slider('minmass', 1, 10000, 100, value_type='int', orientation='vertical')
 viewer = Viewer(reader) + Locate
 viewer.show()
