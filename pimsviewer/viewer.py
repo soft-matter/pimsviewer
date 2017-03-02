@@ -594,11 +594,6 @@ class Viewer(QtWidgets.QMainWindow):
         else:
             event.ignore()
 
-    def wheelEvent(self, event):
-        if 'z' in self._index:
-            new_z = self._index['z'] + int(event.delta() // 120)
-            self.set_index(new_z, 'z')
-
     @property
     def status(self):
         return None

@@ -136,6 +136,9 @@ class DisplayMPL(Display):
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
+        self.fig.canvas.mpl_connect('key_press_event', self.on_key_press)
+        self.fig.canvas.mpl_connect('key_release_event', self.on_key_release)
+        self.control_is_held = False
 
     def redraw(self):
         self.canvas.draw()
@@ -253,10 +256,18 @@ class DisplayMPL(Display):
     def on_scroll(self, event):
         if event.inaxes != self.ax:
             return
-        if 'z' in self.viewer.sizes:
-            self.viewer.set_index(self.viewer.index['z'] - event.step, 'z')
-        else:
+        if self.control_is_held:
             self.zoom(event.step, (event.ydata, event.xdata))
+        elif 'z' in self.viewer.sizes:
+            self.viewer.set_index(self.viewer.index['z'] - int(event.step), 'z')
+
+    def on_key_press(self, event):
+        if event.key == 'control':
+            self.control_is_held = True
+
+    def on_key_release(self, event):
+        if event.key == 'control':
+            self.control_is_held = False
 
 
 class DisplayMPL_mip(DisplayMPL):
