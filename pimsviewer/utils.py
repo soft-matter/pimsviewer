@@ -31,25 +31,25 @@ def to_rgb_uint8(image, autoscale=True):
         autoscale = False
     # 2D, has colors attribute
     elif ndim == 3 and colors is not None:
-        image = to_rgb(image, colors, False)
+        image = to_rgb(image, colors, True)
     # 2D, RGB
     elif ndim == 3 and shape[2] in [3, 4]:
         pass
     # 2D, is multichannel
     elif ndim == 3 and shape[0] < 5:  # guessing; could be small z-stack
-        image = to_rgb(image, None, False)
+        image = to_rgb(image, None, True)
     # 3D, grayscale
     elif ndim == 3:
         grayscale = True
     # 3D, has colors attribute
     elif ndim == 4 and colors is not None:
-        image = to_rgb(image, colors, False)
+        image = to_rgb(image, colors, True)
     # 3D, RGB
     elif ndim == 4 and shape[3] in [3, 4]:
         pass
     # 3D, is multichannel
     elif ndim == 4 and shape[0] < 5:
-        image = to_rgb(image, None, False)
+        image = to_rgb(image, None, True)
     else:
         raise ValueError("No display possible for frames of shape {0}".format(shape))
 
@@ -63,6 +63,8 @@ def to_rgb_uint8(image, autoscale=True):
                 max_value = 2**12 - 1
             image = (image / max_value * 255).astype(np.uint8)
         else:
+            if image.max() > 1:  # unnormalized floats! normalize anyway
+                image = normalize(image)
             image = (image * 255).astype(np.uint8)
 
     if grayscale:
