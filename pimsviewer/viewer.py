@@ -59,6 +59,7 @@ class Viewer(QtWidgets.QMainWindow):
         self.is_playing = False
         self._index = dict()
         self.return_val = []
+        self.reader = None
         self._close_reader = close_reader
 
         # Start main loop
@@ -137,7 +138,7 @@ class Viewer(QtWidgets.QMainWindow):
 
         self.main_widget = QtWidgets.QWidget(self)
         self.setCentralWidget(self.main_widget)
-        self.setMinimumSize(200, 200)
+        self.setMinimumSize(800, 600)
         self.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
                            QtWidgets.QSizePolicy.Preferred)
         self.main_layout = QtWidgets.QGridLayout(self.main_widget)
