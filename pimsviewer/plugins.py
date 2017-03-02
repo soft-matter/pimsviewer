@@ -125,8 +125,6 @@ class PipelinePlugin(Plugin):
     >>> viewer += AddNoise
     >>> original, noise_added = viewer.show()
     """
-    # the class keeps a list of its instances
-    instances = []
     def __init__(self, pipeline_func, name=None, height=0, width=400,
                  dock='bottom'):
         self.pipeline_func = pipeline_func
@@ -138,7 +136,6 @@ class PipelinePlugin(Plugin):
 
         super(PipelinePlugin, self).__init__(height, width, dock)
 
-        PipelinePlugin.instances.append(self)
 
     def attach(self, viewer):
         """Attach the pipeline to an ImageViewer.
