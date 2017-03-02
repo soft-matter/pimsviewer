@@ -7,8 +7,8 @@ import os
 import unittest
 import nose
 import numpy as np
-from pimsviewer import Viewer, Slider, PipelinePlugin, AnnotatePlugin, PlottingPlugin
-from pims import FramesSequence, Frame, pipeline
+from pimsviewer import Viewer, Slider, ProcessPlugin, AnnotatePlugin, PlottingPlugin
+from pims import FramesSequence, Frame
 
 import pandas as pd
 
@@ -38,7 +38,6 @@ class RandomReader(FramesSequence):
         return Frame(frame, frame_no=i)
 
 
-@pipeline
 def add_noise(img, noise_level):
     return img + (np.random.random(img.shape) * noise_level).astype(img.dtype)
 
@@ -54,9 +53,9 @@ def tp_locate(image, radius, minmass, separation, noise_size, ax):
     else:
         return ax.plot(f['x'], f['y'], **_plot_style)
 
-@pipeline
-def no_red(img, level):
-    img[:, :, 0] = level
+def make_black_y(img, x):
+    img = img.copy()
+    img[..., :x] = 0
     return img
 
 
@@ -102,18 +101,18 @@ class TestViewer(unittest.TestCase):
         viewer = Viewer(RandomReader(shape=(3, 10, 128, 128)))
         viewer.show()
 
-    def test_viewer_pipeline(self):
-        AddNoise = PipelinePlugin(add_noise, 'Add noise', dock='right') + \
+    def test_viewer_processplugin(self):
+        AddNoise = ProcessPlugin(add_noise, 'Add noise', dock='right') + \
            Slider('noise_level', 0, 100, 0, orientation='vertical')
         viewer = Viewer(RandomReader()) + AddNoise
         viewer.show()
 
-    def test_viewer_pipeline_multiple(self):
-        AddNoise = PipelinePlugin(add_noise, 'Add noise', dock='right') + \
+    def test_viewer_processplugin_multiple(self):
+        AddNoise = ProcessPlugin(add_noise, 'Add noise', dock='right') + \
            Slider('noise_level', 0, 100, 0, orientation='vertical')
-        NoRed = PipelinePlugin(no_red, 'No red', dock='left') + \
-                       Slider('level', 0, 100, 0, orientation='vertical')
-        viewer = Viewer(RandomReader(shape=(128, 128, 3))) + AddNoise + NoRed
+        Reduce = ProcessPlugin(make_black_y, 'Make black', dock='left') + \
+                       Slider('x', 0, 128, 0, value_type='int', orientation='vertical')
+        viewer = Viewer(RandomReader(shape=(128, 128, 3))) + AddNoise + Reduce
         viewer.show()
 
     def test_viewer_interactive_plotting(self):

@@ -161,9 +161,7 @@ class Slider(BaseWidget):
 
     def _on_slider_changed(self):
         """Call callback function with slider's name and value as parameters"""
-        value = self.val
-        self.editbox.setText(str(value))
-        self.callback(self.name, value)
+        self.val = self.val
 
     def _on_editbox_changed(self):
         """Validate input and set slider value"""
@@ -178,7 +176,6 @@ class Slider(BaseWidget):
 
         self.val = value
         self._good_editbox_input()
-        self.callback(self.name, value)
 
     def _good_editbox_input(self):
         self.editbox.setStyleSheet("background-color: rgb(255, 255, 255)")
@@ -190,21 +187,24 @@ class Slider(BaseWidget):
     def val(self):
         value = self.slider.value()
         if self.value_type == 'float':
-            value = value * self._scale + self._low
-        return value
+            return value * self._scale + self._low
+        else:
+            return value
 
     @val.setter
     def val(self, value):
-        if self.value_type == 'float':
-            value = (value - self._low) / self._scale
-            value_str = '{0:.4f}'.format(value)
-        else:
-            value_str = str(value)
-        self.slider.setValue(value)
         try:
-            self.editbox.setText(value_str)
+            self.editbox.setText(self.value_fmt % value)
         except AttributeError:
             pass
+        if self.value_type == 'float':
+            slider_value = (value - self._low) / self._scale
+        else:
+            slider_value = int(value)
+        self.slider.setValue(slider_value)
+
+        if self.callback is not None:
+            self.callback(self.name, value)
 
 
 class Button(BaseWidget):

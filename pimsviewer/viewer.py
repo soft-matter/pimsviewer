@@ -43,13 +43,13 @@ class Viewer(QtWidgets.QMainWindow):
                   'left': Qt.LeftDockWidgetArea,
                   'right': Qt.RightDockWidgetArea}
     _dropped = Signal(list)
-    image_changed = Signal()
-    # undo = Signal()
-    # redo = Signal()
+
+    # signal on image change, so that plotting plugins can process the change
+    original_image_changed = Signal()
 
     def __init__(self, reader=None, close_reader=True):
         self.plugins = []
-        self._readers = []
+        self._images = []
         self._img = None
         self._display = None
         self.sliders = dict()
@@ -201,8 +201,8 @@ class Viewer(QtWidgets.QMainWindow):
         super(Viewer, self).closeEvent(event)
 
     # the update cascade: open_file -> update_reader -> update_display ->
-    # update_image -> image -> update_view. Any function calls the next one,
-    # but you can call for instance update_image to only update the image.
+    # update_original_image -> image -> update_view. Any function calls the next one,
+    # but you can call for instance update_original_image to only update the image.
 
     def open_file(self, filename=None, reader_cls=None):
         """Open image file and update the viewer's reader"""
@@ -230,8 +230,8 @@ class Viewer(QtWidgets.QMainWindow):
         """Load a new reader into the Viewer."""
         if not isinstance(reader, FramesSequenceND):
             reader = wrap_frames_sequence(reader)
-        self._readers = [reader]
-        reader.iter_axes = ''
+        self.reader = reader
+        reader.iter_axes = 't'
         self._index = reader.default_coords.copy()
 
         # add color tabs
@@ -303,10 +303,10 @@ class Viewer(QtWidgets.QMainWindow):
         self.canvas.updateGeometry()
         self.main_layout.addWidget(self.canvas, 0, 0)
         self.canvas.keyPressEvent = self.keyPressEvent
-        self.update_image()
+        self.update_original_image()
 
-    def update_image(self):
-        """Update the image that is being viewed."""
+    def update_original_image(self):
+        """Update the original image that is being viewed."""
         if self._display.ndim == 3 and 'z' not in self.reader.sizes:
             raise ValueError('z axis does not exist: cannot display in 3D')
         if self.is_multichannel and 'c' not in self.reader.sizes:
@@ -326,29 +326,60 @@ class Viewer(QtWidgets.QMainWindow):
 
         # Update image
         self.reader.default_coords.update(self._index)
-        image = self.reader[0]
-        if 't' in self._index:
-            image.frame_no = self._index['t']
-        self.image = image
+        image = self.reader[self._index['t']]
 
-    @property
-    def image(self):
-        """The image that is being displayed"""
-        return self._img
+        if len(self._images) == 0:
+            self._images = [image] + [None] * len(self.plugins)
+        else:
+            self._images[0] = image
 
-    @image.setter
-    def image(self, image):
-        self._img = image
+        self.update_processed_image()
+
+    def update_processed_image(self, plugin=None):
+        """Update the processing function stack starting from `plugin`."""
+        if self.original_image is None:
+            return
+
+        if plugin is None:
+            first_plugin = 0
+        else:
+            first_plugin = self.plugins.index(plugin)
+
+        # reset the image stack if necessary
+        required_len = len(self.plugins) + 1
+        if len(self._images) != required_len:
+            first_plugin = 0   # we will need to reform the entire stack
+            self._images = [self.original_image] + [None] * (required_len - 1)
+
+        for i, p in enumerate(self.plugins[first_plugin:], start=first_plugin):
+            processed = p.process_image(self._images[i])
+            if processed is None:
+                processed = self._images[i]
+            self._images[i + 1] = processed
         self.update_view()
 
     def update_view(self):
-        """Emit image to display."""
+        """Emit processed image to display."""
         if self.image is None:
             return
 
         self._display.update_image(to_rgb_uint8(self.image,
                                                 autoscale=self.autoscale))
-        self.image_changed.emit()
+        self.original_image_changed.emit()
+
+    @property
+    def original_image(self):
+        """The original image"""
+        if len(self._images) == 0:
+            return
+        return self._images[0]
+
+    @property
+    def image(self):
+        """The image that is being displayed"""
+        if len(self._images) == 0:
+            return
+        return self._images[-1]
 
     @property
     def canvas(self):
@@ -369,7 +400,6 @@ class Viewer(QtWidgets.QMainWindow):
         """The current index (dictionary). Setting this has no effect."""
         return self._index.copy()  # copy the dict to make it read only
 
-
     def _set_index(self, value, name):
         """Set the index without checks. Mainly for timer callback."""
         try:
@@ -378,7 +408,7 @@ class Viewer(QtWidgets.QMainWindow):
         except KeyError:
             pass  # but continue when a coordinate did not exist
         self._index[name] = value
-        self.update_image()
+        self.update_original_image()
 
 
     def set_index(self, value=0, name='t'):
@@ -394,7 +424,6 @@ class Viewer(QtWidgets.QMainWindow):
             self._timer.reset(value)
         self._set_index(value, name)
 
-
     def channel_tab_callback(self, index):
         """Callback function for channel tabs."""
         if index == 0 and self.is_multichannel:
@@ -404,17 +433,9 @@ class Viewer(QtWidgets.QMainWindow):
         self.is_multichannel = index == 0
         if index > 0:  # monochannel: update channel field
             self._index['c'] = index - 1  # because 0 is multichannel
-        self.update_image()
+        self.update_original_image()
 
     # Access to the reader and its properties
-
-    @property
-    def reader(self):
-        """The current reader"""
-        if len(self._readers) == 0:
-            return None
-        else:
-            return self._readers[-1]
 
     @property
     def sizes(self):
@@ -440,7 +461,7 @@ class Viewer(QtWidgets.QMainWindow):
         if self.channel_tabs is not None:
             self.channel_tabs.close()
         self.reader.close()
-        self._readers = []
+        self.reader = None
         self._display.close()
 
     # Video playback
@@ -518,7 +539,7 @@ class Viewer(QtWidgets.QMainWindow):
 
     def resize_display(self, w=None, h=None, factor=1):
         """Resize the image display widget to a certain size or by a factor."""
-        h_im, w_im = self.image.shape[-2:]
+        h_im, w_im = self.sizes['y'], self.sizes['x']
         h_im *= factor
         w_im *= factor
         if h is None and w is None:
