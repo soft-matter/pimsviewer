@@ -9,12 +9,12 @@ import warnings
 
 import numpy as np
 import pims
-from pims import FramesSequence, FramesSequenceND, Frame
+from pims import FramesSequence, FramesSequenceND
 
 from .widgets import CheckBox, DockWidget, VideoTimer, Slider
 from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
-                 init_qtapp, start_qtapp, rgb_view)
-from .display import Display, DisplayMPL
+                 init_qtapp, start_qtapp)
+from .display import Display
 from .utils import (wrap_frames_sequence, recursive_subclasses,
                               to_rgb_uint8)
 
@@ -51,7 +51,7 @@ class Viewer(QtWidgets.QMainWindow):
         self.plugins = []
         self._readers = []
         self._img = None
-        self.renderer = None
+        self._display = None
         self.sliders = dict()
         self.channel_tabs = None
         self.slider_dock = None
@@ -82,8 +82,8 @@ class Viewer(QtWidgets.QMainWindow):
                                  Qt.CTRL + Qt.Key_O)
         self.file_menu.addMenu(open_with_menu)
         self.file_menu.addAction('Close', self.close_reader)
-        self.file_menu.addAction('Save', self.save_file,
-                                 Qt.CTRL + Qt.Key_S)
+        # self.file_menu.addAction('Save', self.save_file,
+        #                          Qt.CTRL + Qt.Key_S)
         self.file_menu.addAction('Copy', self.to_clipboard,
                                  Qt.CTRL + Qt.Key_C)
         self.file_menu.addAction('Quit', self.close,
@@ -93,15 +93,21 @@ class Viewer(QtWidgets.QMainWindow):
         self.view_menu = QtWidgets.QMenu('&View', self)
         self._autoscale = QtWidgets.QAction('&Autoscale', self.view_menu,
                                             checkable=True)
+        self._autoscale.setChecked(True)
         self._autoscale.toggled.connect(self.update_view)
         self.view_menu.addAction(self._autoscale)
 
         # list all Display subclasses in the View menu
+        mode_menu = QtWidgets.QMenu('&Mode', self)
+        mode_menu.addAction(Display.name + ' (default)',
+                            partial(self.update_display,
+                                    display_class=Display))
         for cls in recursive_subclasses(Display):
             if cls.available:
-                self.view_menu.addAction(cls.name,
-                                         partial(self.update_display,
-                                                 display_class=cls))
+                mode_menu.addAction(cls.name, partial(self.update_display,
+                                                      display_class=cls))
+        self.view_menu.addMenu(mode_menu)
+
         resize_menu = QtWidgets.QMenu('&Resize', self)
         resize_menu.addAction('33 %', partial(self.resize_display, factor=1/3))
         resize_menu.addAction('50 %', partial(self.resize_display, factor=1/2))
@@ -121,13 +127,13 @@ class Viewer(QtWidgets.QMainWindow):
 
         self.menuBar().addMenu(self.view_menu)
 
-        self.pipeline_menu = QtWidgets.QMenu('&Pipelines', self)
-        from pimsviewer.plugins import PipelinePlugin
-        for pipeline_obj in PipelinePlugin.instances:
-            self.pipeline_menu.addAction(pipeline_obj.name,
-                                         partial(self.add_plugin,
-                                                 pipeline_obj))
-        self.menuBar().addMenu(self.pipeline_menu)
+        # self.pipeline_menu = QtWidgets.QMenu('&Pipelines', self)
+        # from pimsviewer.plugins import PipelinePlugin
+        # for pipeline_obj in PipelinePlugin.instances:
+        #     self.pipeline_menu.addAction(pipeline_obj.name,
+        #                                  partial(self.add_plugin,
+        #                                          pipeline_obj))
+        # self.menuBar().addMenu(self.pipeline_menu)
 
         self.main_widget = QtWidgets.QWidget(self)
         self.setCentralWidget(self.main_widget)
@@ -144,6 +150,7 @@ class Viewer(QtWidgets.QMainWindow):
 
         # initialize the timer for video playback
         self._timer = VideoTimer(self)
+        self._play_checkbox = None
 
         if reader is not None:
             self.update_reader(reader)
@@ -189,8 +196,8 @@ class Viewer(QtWidgets.QMainWindow):
                 self.return_val.append(None)
         if self._close_reader:
             self.close_reader()
-        if self.renderer is not None:
-            self.renderer.close()
+        if self._display is not None:
+            self._display.close()
         super(Viewer, self).closeEvent(event)
 
     # the update cascade: open_file -> update_reader -> update_display ->
@@ -255,9 +262,9 @@ class Viewer(QtWidgets.QMainWindow):
             for i, axis in enumerate(self.sliders):
                 slider_layout.addWidget(self.sliders[axis], i, 0)
                 if axis == 't':
-                    checkbox = CheckBox('play', self.is_playing,
-                                        callback=self.play_callback)
-                    slider_layout.addWidget(checkbox, i, 1)
+                    self._play_checkbox = CheckBox('play', self.is_playing,
+                                                   callback=self.play_callback)
+                    slider_layout.addWidget(self._play_checkbox, i, 1)
 
             self.slider_dock = QtWidgets.QDockWidget()
             self.slider_dock.setWidget(slider_widget)
@@ -278,7 +285,7 @@ class Viewer(QtWidgets.QMainWindow):
     def update_display(self, display_class=None):
         """Change display mode."""
         if display_class is None:
-            display_class = DisplayMPL
+            display_class = Display
 
         shape = [self.reader.sizes['y'], self.reader.sizes['x']]
         if display_class.ndim == 3:
@@ -287,20 +294,20 @@ class Viewer(QtWidgets.QMainWindow):
             except KeyError:
                 raise KeyError('z axis does not exist: cannot display in 3D')
 
-        if self.renderer is not None:
-            self.renderer.close()
-        self.renderer = display_class(self, shape)
+        if self._display is not None:
+            self._display.close()
+        self._display = display_class(self, shape)
 
-        self.renderer.widget.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
-                                           QtWidgets.QSizePolicy.Expanding)
-        self.renderer.widget.updateGeometry()
-        self.main_layout.addWidget(self.renderer.widget, 0, 0)
-        self.renderer.widget.keyPressEvent = self.keyPressEvent
+        self.canvas.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                                  QtWidgets.QSizePolicy.Expanding)
+        self.canvas.updateGeometry()
+        self.main_layout.addWidget(self.canvas, 0, 0)
+        self.canvas.keyPressEvent = self.keyPressEvent
         self.update_image()
 
     def update_image(self):
         """Update the image that is being viewed."""
-        if self.renderer.ndim == 3 and 'z' not in self.reader.sizes:
+        if self._display.ndim == 3 and 'z' not in self.reader.sizes:
             raise ValueError('z axis does not exist: cannot display in 3D')
         if self.is_multichannel and 'c' not in self.reader.sizes:
             raise ValueError('c axis does not exist: cannot display multicolor')
@@ -309,7 +316,7 @@ class Viewer(QtWidgets.QMainWindow):
         bundle_axes = ''
         if self.is_multichannel:
             bundle_axes += 'c'
-        if self.renderer.ndim == 3:
+        if self._display.ndim == 3:
             bundle_axes += 'z'
         self.reader.bundle_axes = bundle_axes + 'yx'
 
@@ -339,8 +346,21 @@ class Viewer(QtWidgets.QMainWindow):
         if self.image is None:
             return
 
-        self.renderer.image = to_rgb_uint8(self.image, autoscale=self.autoscale)
+        self._display.update_image(to_rgb_uint8(self.image,
+                                                autoscale=self.autoscale))
         self.image_changed.emit()
+
+    @property
+    def canvas(self):
+        return self._display.canvas
+
+    @property
+    def ax(self):
+        return self._display.ax
+
+    @property
+    def fig(self):
+        return self._display.fig
 
     # Change the current index
 
@@ -421,7 +441,7 @@ class Viewer(QtWidgets.QMainWindow):
             self.channel_tabs.close()
         self.reader.close()
         self._readers = []
-        self.renderer.close()
+        self._display.close()
 
     # Video playback
 
@@ -436,6 +456,8 @@ class Viewer(QtWidgets.QMainWindow):
 
     def play(self, start=True, fps=None):
         """Control movie playback."""
+        if self._play_checkbox is not None:
+            self._play_checkbox.val = start
         if start == self.is_playing:
             return
         if start:
@@ -507,7 +529,7 @@ class Viewer(QtWidgets.QMainWindow):
         elif w is None:
             w = int(h * w_im / h_im)
         self.showNormal()  # make sure not to be in maximized mode
-        self.renderer.resize(w, h)
+        self._display.resize(w, h)
 
     def keyPressEvent(self, event):
         if type(event) == QtGui.QKeyEvent:
@@ -567,18 +589,18 @@ class Viewer(QtWidgets.QMainWindow):
                 except AttributeError:
                     self.fps = 25.
             elif key == Qt.Key_F:
-                self.renderer.set_fullscreen()
+                self._display.set_fullscreen()
             elif key == Qt.Key_Escape:
-                self.renderer.set_fullscreen(False)
+                self._display.set_fullscreen(False)
             elif key == Qt.Key_Plus:
                 if hasattr(self.renderer, 'zoom'):
-                    self.renderer.zoom(1)
+                    self._display.zoom(1)
             elif key == Qt.Key_Minus:
                 if hasattr(self.renderer, 'zoom'):
-                    self.renderer.zoom(-1)
+                    self._display.zoom(-1)
             elif key == Qt.Key_R:
                 if hasattr(self.renderer, 'zoom'):
-                    self.renderer.zoom()
+                    self._display.zoom()
             elif key == Qt.Key_Z:
                 self.undo.emit()
             elif key == Qt.Key_Y:
@@ -602,60 +624,60 @@ class Viewer(QtWidgets.QMainWindow):
     def status(self, value):
         self._status_bar.showMessage(str(value))
 
-    # Output data
-
+    # # Output data (EXPERIMENTAL)
+    #
     def to_pixmap(self):
-        pixmap = QtWidgets.QPixmap(self.renderer.widget.size())
-        self.renderer.widget.render(pixmap)
+        pixmap = QtWidgets.QPixmap(self.canvas.size())
+        self.canvas.render(pixmap)
         return pixmap
 
     def to_clipboard(self):
         clipboard = QtWidgets.QApplication.clipboard()
         clipboard.setPixmap(self.to_pixmap())
-
-    def to_frame(self):
-        return Frame(rgb_view(self.to_pixmap().toImage()),
-                     frame_no=self.index['t'])
-
-    def save_file(self, filename=None):
-        str_filter = ";;".join(['All files (*.*)',
-                                'H264 video (*.avi)',
-                                'MPEG4 video (*.mp4 *.mov)',
-                                'Windows Media Player video (*.wmv)'])
-
-
-        if VideoClip is None:
-            raise ImportError('The MoviePy exporter requires moviepy to work.')
-
-        if filename is None:
-            try:
-                cur_dir = os.path.dirname(self.reader.filename)
-            except AttributeError:
-                cur_dir = ''
-            filename = QtWidgets.QFileDialog.getSaveFileName(self,
-                                                             "Export Movie",
-                                                             cur_dir,
-                                                             str_filter)
-            if isinstance(filename, tuple):
-                # Handle discrepancy between PyQt4 and PySide APIs.
-                filename = filename[0]
-
-        _, ext = os.path.splitext(os.path.basename(filename))
-        ext = ext[1:].lower()
-        if ext == 'wmv':
-            codec = 'wmv2'
-        else:
-            codec = None  # let moviepy decide
-        if ext == '':
-            filename += '.mp4'
-
-        try:
-            rate = self.reader.frame_rate
-        except AttributeError:
-            rate = 25
-
-        self.reader.iter_axes = ['t']
-        self.status = 'Saving to {}'.format(filename)
-        pims.export(self.reader, filename, rate, codec=codec)
-        self.update_image()
-        self.status = 'Done saving {}'.format(filename)
+    #
+    # def to_frame(self):
+    #     return Frame(rgb_view(self.to_pixmap().toImage()),
+    #                  frame_no=self.index['t'])
+    #
+    # def save_file(self, filename=None):
+    #     str_filter = ";;".join(['All files (*.*)',
+    #                             'H264 video (*.avi)',
+    #                             'MPEG4 video (*.mp4 *.mov)',
+    #                             'Windows Media Player video (*.wmv)'])
+    #
+    #
+    #     if VideoClip is None:
+    #         raise ImportError('The MoviePy exporter requires moviepy to work.')
+    #
+    #     if filename is None:
+    #         try:
+    #             cur_dir = os.path.dirname(self.reader.filename)
+    #         except AttributeError:
+    #             cur_dir = ''
+    #         filename = QtWidgets.QFileDialog.getSaveFileName(self,
+    #                                                          "Export Movie",
+    #                                                          cur_dir,
+    #                                                          str_filter)
+    #         if isinstance(filename, tuple):
+    #             # Handle discrepancy between PyQt4 and PySide APIs.
+    #             filename = filename[0]
+    #
+    #     _, ext = os.path.splitext(os.path.basename(filename))
+    #     ext = ext[1:].lower()
+    #     if ext == 'wmv':
+    #         codec = 'wmv2'
+    #     else:
+    #         codec = None  # let moviepy decide
+    #     if ext == '':
+    #         filename += '.mp4'
+    #
+    #     try:
+    #         rate = self.reader.frame_rate
+    #     except AttributeError:
+    #         rate = 25
+    #
+    #     self.reader.iter_axes = ['t']
+    #     self.status = 'Saving to {}'.format(filename)
+    #     pims.export(self.reader, filename, rate, codec=codec)
+    #     self.update_image()
+    #     self.status = 'Done saving {}'.format(filename)
