@@ -246,7 +246,7 @@ class PlottingPlugin(Plugin):
 class AnnotatePlugin(Plugin):
     name = 'Annotate Features'
     def __init__(self, features, frame_axes='t', plot_style=None,
-                 text_style=None, picking_tolerance=5):
+                 text_style=None, picking_tolerance=5, z_width=0.5):
         super(AnnotatePlugin, self).__init__(dock='left')
         self.artist = None
         if features.index.is_unique:
@@ -258,6 +258,7 @@ class AnnotatePlugin(Plugin):
         self._no_click = None
         self._selected = None
         self._frame_axes = frame_axes
+        self.z_width = z_width
         self.plot_style = dict(s=200, linewidths=2, edgecolors='r',
                                facecolors='none', marker='o')
         if plot_style is not None:
@@ -291,7 +292,7 @@ class AnnotatePlugin(Plugin):
         if 'z' in self.viewer.sizes:
             z = self.viewer.index['z'] + 0.5
             f_frame = self.features[(self.features['frame'] == frame_no) &
-                                    (np.abs(self.features['z'] - z) <= 0.5)]
+                                    (np.abs(self.features['z'] - z) <= self.z_width)]
         else:
             f_frame = self.features[self.features['frame'] == frame_no]
         f_frame = f_frame[~np.isnan(f_frame[['x', 'y']]).any(1)].copy()
@@ -352,11 +353,8 @@ class AnnotatePlugin(Plugin):
 class SelectionPlugin(AnnotatePlugin):
     name = 'Select Features'
 
-    def __init__(self, features, frame_axes='t', plot_style=None,
-                 text_style=None, picking_tolerance=5):
-        super(SelectionPlugin, self).__init__(features, frame_axes,
-                                              plot_style, text_style,
-                                              picking_tolerance)
+    def __init__(self, *args, **kwargs):
+        super(SelectionPlugin, self).__init__(*args, **kwargs)
         if 'hide' not in self.features:
             self.features['hide'] = False
         self.dragging = False
@@ -375,7 +373,7 @@ class SelectionPlugin(AnnotatePlugin):
         if 'z' in self.viewer.sizes:
             z = self.viewer.index['z'] + 0.5
             f_frame = self.features[(self.features['frame'] == frame_no) &
-                                    (np.abs(self.features['z'] - z) <= 0.5)]
+                                    (np.abs(self.features['z'] - z) <= self.z_width)]
         else:
             f_frame = self.features[self.features['frame'] == frame_no]
         f_frame = f_frame[~np.isnan(f_frame[['x', 'y']]).any(1)].copy()
