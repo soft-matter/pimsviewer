@@ -3,6 +3,8 @@ from __future__ import (absolute_import, division, print_function,
 
 import six
 import os
+from os import listdir, path
+from os.path import isfile, join
 from functools import partial
 from itertools import chain
 import warnings
@@ -16,7 +18,7 @@ from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
                  init_qtapp, start_qtapp)
 from .display import Display
 from .utils import (wrap_frames_sequence, recursive_subclasses,
-                              to_rgb_uint8)
+                    to_rgb_uint8)
 
 try:
     with warnings.catch_warnings():
@@ -61,6 +63,7 @@ class Viewer(QtWidgets.QMainWindow):
         self.return_val = []
         self.reader = None
         self._close_reader = close_reader
+        self.filename = None
 
         # Start main loop
         init_qtapp()
@@ -82,6 +85,10 @@ class Viewer(QtWidgets.QMainWindow):
         self.file_menu.addAction('Open', self.open_file,
                                  Qt.CTRL + Qt.Key_O)
         self.file_menu.addMenu(open_with_menu)
+        self.file_menu.addAction('Open next', self.open_next_file,
+                                 Qt.CTRL + Qt.SHIFT + Qt.Key_O)
+        self.file_menu.addAction('Open previous', self.open_previous_file,
+                                 Qt.ALT + Qt.SHIFT + Qt.Key_O)
         self.file_menu.addAction('Close', self.close_reader)
         # self.file_menu.addAction('Save', self.save_file,
         #                          Qt.CTRL + Qt.Key_S)
@@ -110,16 +117,18 @@ class Viewer(QtWidgets.QMainWindow):
         self.view_menu.addMenu(mode_menu)
 
         resize_menu = QtWidgets.QMenu('&Resize', self)
-        resize_menu.addAction('33 %', partial(self.resize_display, factor=1/3))
-        resize_menu.addAction('50 %', partial(self.resize_display, factor=1/2))
+        resize_menu.addAction('33 %', partial(self.resize_display, factor=1 / 3))
+        resize_menu.addAction('50 %', partial(self.resize_display, factor=1 / 2))
         resize_menu.addAction('100 %', partial(self.resize_display, factor=1))
         resize_menu.addAction('200 %', partial(self.resize_display, factor=2))
         resize_menu.addAction('300 %', partial(self.resize_display, factor=3))
         self.view_menu.addMenu(resize_menu)
 
         play_menu = QtWidgets.QMenu('&Play', self)
+
         def _mult_fps(factor):
             self.fps *= factor
+
         play_menu.addAction('Start / stop', lambda: self.play(not self.is_playing))
         play_menu.addAction('Switch direction', partial(_mult_fps, factor=-1))
         play_menu.addAction('Faster', partial(_mult_fps, factor=1.2))
@@ -226,6 +235,47 @@ class Viewer(QtWidgets.QMainWindow):
             self.close_reader()
         self.update_reader(reader)
         self.status = 'Opened {}'.format(filename)
+        self.filename = filename
+
+    def open_next_file(self, forward=True):
+        """
+        Opens the next file in the current directory
+
+        Parameters
+        ----------
+        forward : bool
+            Cycle forward or backwards
+
+        """
+        if self.filename is None:
+            self.open_file()
+
+        current_directory = path.dirname(self.filename)
+        file_list = self._get_all_files_in_dir(current_directory)
+        if len(file_list) < 2:
+            self.status = 'No file found for opening'
+            return
+
+        try:
+            current_file_index = file_list.index(path.basename(self.filename))
+        except ValueError:
+            self.status = 'No file found for opening'
+            return
+
+        next_index = current_file_index + 1 if forward else current_file_index - 1
+        try:
+            next_file = file_list[next_index]
+        except IndexError:
+            next_index = 0 if forward else -1
+            next_file = file_list[next_index]
+
+        self.open_file(filename=path.join(current_directory, next_file))
+
+    def open_previous_file(self):
+        """
+        Opens the previous file in the current directory
+        """
+        self.open_next_file(forward=False)
 
     def update_reader(self, reader):
         """Load a new reader into the Viewer."""
@@ -253,9 +303,9 @@ class Viewer(QtWidgets.QMainWindow):
         for axis in reader.sizes:
             if axis in ['x', 'y', 'c'] or reader.sizes[axis] <= 1:
                 continue
-            self.sliders[axis] = Slider(axis, low=0, high=reader.sizes[axis]-1,
-             value=self._index[axis], update_on='release', value_type='int',
-             callback=lambda x, y: self.set_index(y, x))
+            self.sliders[axis] = Slider(axis, low=0, high=reader.sizes[axis] - 1,
+                                        value=self._index[axis], update_on='release', value_type='int',
+                                        callback=lambda x, y: self.set_index(y, x))
 
         if len(self.sliders) > 0:
             slider_widget = QtWidgets.QWidget()
@@ -277,7 +327,7 @@ class Viewer(QtWidgets.QMainWindow):
         # set playback speed
         try:
             self._timer.fps = self.reader.frame_rate
-        except AttributeError:
+        except (AttributeError, KeyError):
             self._timer.fps = 25.
 
         self.update_display()
@@ -349,7 +399,7 @@ class Viewer(QtWidgets.QMainWindow):
         # reset the image stack if necessary
         required_len = len(self.plugins) + 1
         if len(self._images) != required_len:
-            first_plugin = 0   # we will need to reform the entire stack
+            first_plugin = 0  # we will need to reform the entire stack
             self._images = [self.original_image] + [None] * (required_len - 1)
 
         for i, p in enumerate(self.plugins[first_plugin:], start=first_plugin):
@@ -411,7 +461,6 @@ class Viewer(QtWidgets.QMainWindow):
         self._index[name] = value
         self.update_original_image()
 
-
     def set_index(self, value=0, name='t'):
         """Update the index along a specific axis"""
         if name not in self.reader.sizes:
@@ -449,7 +498,6 @@ class Viewer(QtWidgets.QMainWindow):
     @autoscale.setter
     def autoscale(self, value):
         return self._autoscale.setChecked(value)
-
 
     def close_reader(self):
         """Close the current reader"""
@@ -560,7 +608,7 @@ class Viewer(QtWidgets.QMainWindow):
             if key in range(0x30, 0x39 + 1):  # number keys: move to deciles
                 index = int(self.reader.sizes['t'] * (key - 48) / 10)
                 self.set_index(index, 't')
-            if key in range(0x01000037,       # F8-F12 keys: change channel
+            if key in range(0x01000037,  # F8-F12 keys: change channel
                             0x0100003b + 1) and 'c' in self.reader.sizes:
                 index = key - 0x01000037
                 print('key pressed to {}'.format(index))
@@ -628,7 +676,7 @@ class Viewer(QtWidgets.QMainWindow):
             elif key == Qt.Key_Y:
                 self.redo.emit()
             elif key == Qt.Key_A:
-                self.resize_display(factor=1/2)
+                self.resize_display(factor=1 / 2)
             elif key == Qt.Key_S:
                 self.resize_display(factor=1)
             elif key == Qt.Key_D:
@@ -656,50 +704,54 @@ class Viewer(QtWidgets.QMainWindow):
     def to_clipboard(self):
         clipboard = QtWidgets.QApplication.clipboard()
         clipboard.setPixmap(self.to_pixmap())
-    #
-    # def to_frame(self):
-    #     return Frame(rgb_view(self.to_pixmap().toImage()),
-    #                  frame_no=self.index['t'])
-    #
-    # def save_file(self, filename=None):
-    #     str_filter = ";;".join(['All files (*.*)',
-    #                             'H264 video (*.avi)',
-    #                             'MPEG4 video (*.mp4 *.mov)',
-    #                             'Windows Media Player video (*.wmv)'])
-    #
-    #
-    #     if VideoClip is None:
-    #         raise ImportError('The MoviePy exporter requires moviepy to work.')
-    #
-    #     if filename is None:
-    #         try:
-    #             cur_dir = os.path.dirname(self.reader.filename)
-    #         except AttributeError:
-    #             cur_dir = ''
-    #         filename = QtWidgets.QFileDialog.getSaveFileName(self,
-    #                                                          "Export Movie",
-    #                                                          cur_dir,
-    #                                                          str_filter)
-    #         if isinstance(filename, tuple):
-    #             # Handle discrepancy between PyQt4 and PySide APIs.
-    #             filename = filename[0]
-    #
-    #     _, ext = os.path.splitext(os.path.basename(filename))
-    #     ext = ext[1:].lower()
-    #     if ext == 'wmv':
-    #         codec = 'wmv2'
-    #     else:
-    #         codec = None  # let moviepy decide
-    #     if ext == '':
-    #         filename += '.mp4'
-    #
-    #     try:
-    #         rate = self.reader.frame_rate
-    #     except AttributeError:
-    #         rate = 25
-    #
-    #     self.reader.iter_axes = ['t']
-    #     self.status = 'Saving to {}'.format(filename)
-    #     pims.export(self.reader, filename, rate, codec=codec)
-    #     self.update_image()
-    #     self.status = 'Done saving {}'.format(filename)
+
+    @staticmethod
+    def _get_all_files_in_dir(directory):
+        return [f for f in listdir(directory) if isfile(join(directory, f))]
+        #
+        # def to_frame(self):
+        #     return Frame(rgb_view(self.to_pixmap().toImage()),
+        #                  frame_no=self.index['t'])
+        #
+        # def save_file(self, filename=None):
+        #     str_filter = ";;".join(['All files (*.*)',
+        #                             'H264 video (*.avi)',
+        #                             'MPEG4 video (*.mp4 *.mov)',
+        #                             'Windows Media Player video (*.wmv)'])
+        #
+        #
+        #     if VideoClip is None:
+        #         raise ImportError('The MoviePy exporter requires moviepy to work.')
+        #
+        #     if filename is None:
+        #         try:
+        #             cur_dir = os.path.dirname(self.reader.filename)
+        #         except AttributeError:
+        #             cur_dir = ''
+        #         filename = QtWidgets.QFileDialog.getSaveFileName(self,
+        #                                                          "Export Movie",
+        #                                                          cur_dir,
+        #                                                          str_filter)
+        #         if isinstance(filename, tuple):
+        #             # Handle discrepancy between PyQt4 and PySide APIs.
+        #             filename = filename[0]
+        #
+        #     _, ext = os.path.splitext(os.path.basename(filename))
+        #     ext = ext[1:].lower()
+        #     if ext == 'wmv':
+        #         codec = 'wmv2'
+        #     else:
+        #         codec = None  # let moviepy decide
+        #     if ext == '':
+        #         filename += '.mp4'
+        #
+        #     try:
+        #         rate = self.reader.frame_rate
+        #     except AttributeError:
+        #         rate = 25
+        #
+        #     self.reader.iter_axes = ['t']
+        #     self.status = 'Saving to {}'.format(filename)
+        #     pims.export(self.reader, filename, rate, codec=codec)
+        #     self.update_image()
+        #     self.status = 'Done saving {}'.format(filename)
