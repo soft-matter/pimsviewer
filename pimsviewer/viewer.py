@@ -708,50 +708,51 @@ class Viewer(QtWidgets.QMainWindow):
     @staticmethod
     def _get_all_files_in_dir(directory):
         return [f for f in listdir(directory) if isfile(join(directory, f))]
-        #
-        # def to_frame(self):
-        #     return Frame(rgb_view(self.to_pixmap().toImage()),
-        #                  frame_no=self.index['t'])
-        #
-        # def save_file(self, filename=None):
-        #     str_filter = ";;".join(['All files (*.*)',
-        #                             'H264 video (*.avi)',
-        #                             'MPEG4 video (*.mp4 *.mov)',
-        #                             'Windows Media Player video (*.wmv)'])
-        #
-        #
-        #     if VideoClip is None:
-        #         raise ImportError('The MoviePy exporter requires moviepy to work.')
-        #
-        #     if filename is None:
-        #         try:
-        #             cur_dir = os.path.dirname(self.reader.filename)
-        #         except AttributeError:
-        #             cur_dir = ''
-        #         filename = QtWidgets.QFileDialog.getSaveFileName(self,
-        #                                                          "Export Movie",
-        #                                                          cur_dir,
-        #                                                          str_filter)
-        #         if isinstance(filename, tuple):
-        #             # Handle discrepancy between PyQt4 and PySide APIs.
-        #             filename = filename[0]
-        #
-        #     _, ext = os.path.splitext(os.path.basename(filename))
-        #     ext = ext[1:].lower()
-        #     if ext == 'wmv':
-        #         codec = 'wmv2'
-        #     else:
-        #         codec = None  # let moviepy decide
-        #     if ext == '':
-        #         filename += '.mp4'
-        #
-        #     try:
-        #         rate = self.reader.frame_rate
-        #     except AttributeError:
-        #         rate = 25
-        #
-        #     self.reader.iter_axes = ['t']
-        #     self.status = 'Saving to {}'.format(filename)
-        #     pims.export(self.reader, filename, rate, codec=codec)
-        #     self.update_image()
-        #     self.status = 'Done saving {}'.format(filename)
+
+    #
+    # def to_frame(self):
+    #     return Frame(rgb_view(self.to_pixmap().toImage()),
+    #                  frame_no=self.index['t'])
+    #
+    # def save_file(self, filename=None):
+    #     str_filter = ";;".join(['All files (*.*)',
+    #                             'H264 video (*.avi)',
+    #                             'MPEG4 video (*.mp4 *.mov)',
+    #                             'Windows Media Player video (*.wmv)'])
+    #
+    #
+    #     if VideoClip is None:
+    #         raise ImportError('The MoviePy exporter requires moviepy to work.')
+    #
+    #     if filename is None:
+    #         try:
+    #             cur_dir = os.path.dirname(self.reader.filename)
+    #         except AttributeError:
+    #             cur_dir = ''
+    #         filename = QtWidgets.QFileDialog.getSaveFileName(self,
+    #                                                          "Export Movie",
+    #                                                          cur_dir,
+    #                                                          str_filter)
+    #         if isinstance(filename, tuple):
+    #             # Handle discrepancy between PyQt4 and PySide APIs.
+    #             filename = filename[0]
+    #
+    #     _, ext = os.path.splitext(os.path.basename(filename))
+    #     ext = ext[1:].lower()
+    #     if ext == 'wmv':
+    #         codec = 'wmv2'
+    #     else:
+    #         codec = None  # let moviepy decide
+    #     if ext == '':
+    #         filename += '.mp4'
+    #
+    #     try:
+    #         rate = self.reader.frame_rate
+    #     except AttributeError:
+    #         rate = 25
+    #
+    #     self.reader.iter_axes = ['t']
+    #     self.status = 'Saving to {}'.format(filename)
+    #     pims.export(self.reader, filename, rate, codec=codec)
+    #     self.update_image()
+    #     self.status = 'Done saving {}'.format(filename)
