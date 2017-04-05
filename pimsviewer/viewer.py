@@ -12,13 +12,14 @@ import warnings
 import numpy as np
 import pims
 from pims import FramesSequence, FramesSequenceND
+from pims.utils.sort import natural_keys
 
 from .widgets import CheckBox, DockWidget, VideoTimer, Slider
 from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
                  init_qtapp, start_qtapp)
 from .display import Display
 from .utils import (wrap_frames_sequence, recursive_subclasses,
-                    to_rgb_uint8)
+                    to_rgb_uint8, memoize)
 
 try:
     with warnings.catch_warnings():
@@ -706,8 +707,9 @@ class Viewer(QtWidgets.QMainWindow):
         clipboard.setPixmap(self.to_pixmap())
 
     @staticmethod
+    @memoize
     def _get_all_files_in_dir(directory):
-        return [f for f in listdir(directory) if isfile(join(directory, f))]
+        return sorted([f for f in listdir(directory) if isfile(join(directory, f))], key=natural_keys)
 
     #
     # def to_frame(self):

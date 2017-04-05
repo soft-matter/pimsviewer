@@ -1,14 +1,17 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import functools
+
 import numpy as np
 from pims import Frame, FramesSequenceND, to_rgb, normalize
+
 
 def recursive_subclasses(cls):
     "Return all subclasses (and their subclasses, etc.)."
     # Source: http://stackoverflow.com/a/3862957/1221924
     return (cls.__subclasses__() +
-        [g for s in cls.__subclasses__() for g in recursive_subclasses(s)])
+            [g for s in cls.__subclasses__() for g in recursive_subclasses(s)])
 
 
 def to_rgb_uint8(image, autoscale=True):
@@ -59,8 +62,8 @@ def to_rgb_uint8(image, autoscale=True):
         if np.issubdtype(image.dtype, np.integer):
             max_value = np.iinfo(image.dtype).max
             # sometimes 12-bit images are stored as unsigned 16-bit
-            if max_value == 2**16 - 1 and image.max() < 2**12:
-                max_value = 2**12 - 1
+            if max_value == 2 ** 16 - 1 and image.max() < 2 ** 12:
+                max_value = 2 ** 12 - 1
             image = (image / max_value * 255).astype(np.uint8)
         else:
             if image.max() > 1:  # unnormalized floats! normalize anyway
@@ -136,6 +139,7 @@ def wrap_frames_sequence(frames):
 class ND_Wrapper(FramesSequenceND):
     no_reader = True
     propagate_attrs = ['sizes', 'default_coords', 'bundle_axes', 'iter_axes']
+
     def __init__(self, frames, reads_axes, **sizes):
         super(ND_Wrapper, self).__init__()
         self._reader = frames
@@ -152,3 +156,18 @@ class ND_Wrapper(FramesSequenceND):
 
     def __getattr__(self, attr):
         return getattr(self._reader, attr)
+
+
+def memoize(obj):
+    """Memoize the function call result"""
+    cache = obj.cache = {}
+
+    @functools.wraps(obj)
+    def memoizer(*args, **kwargs):
+        """Memoize by storing the results in a dict"""
+        key = str(args) + str(kwargs)
+        if key not in cache:
+            cache[key] = obj(*args, **kwargs)
+        return cache[key]
+
+    return memoizer
