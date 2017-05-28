@@ -340,11 +340,12 @@ class Viewer(QtWidgets.QMainWindow):
             display_class = Display
 
         shape = [self.reader.sizes['y'], self.reader.sizes['x']]
-        if display_class.ndim == 3:
-            try:
-                shape = [self.reader.sizes['z']] + shape
-            except KeyError:
-                raise KeyError('z axis does not exist: cannot display in 3D')
+        if display_class.ndim == 3 and 'z' in self.reader.sizes:
+            shape = [self.reader.sizes['z']] + shape
+        elif display_class.ndim == 3:
+            # Display class does not support 2D images
+            display_class = Display
+            self.status = 'Requested display mode only supports 3D images'
 
         if self._display is not None:
             self._display.close()
