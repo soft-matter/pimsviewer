@@ -4,7 +4,9 @@ from __future__ import (absolute_import, division, print_function,
 import functools
 
 import numpy as np
-from pims import Frame, FramesSequenceND, to_rgb, normalize
+from pims import Frame, to_rgb, normalize
+from pims.base_frames import FramesSequence, FramesSequenceND
+from itertools import chain
 
 
 def recursive_subclasses(cls):
@@ -12,6 +14,23 @@ def recursive_subclasses(cls):
     # Source: http://stackoverflow.com/a/3862957/1221924
     return (cls.__subclasses__() +
             [g for s in cls.__subclasses__() for g in recursive_subclasses(s)])
+
+
+def drop_dot(s):
+    if s.startswith('.'):
+        return s[1:]
+    else:
+        return s
+
+
+def get_supported_extensions():
+    # list all readers derived from the pims baseclasses
+    all_handlers = chain(recursive_subclasses(FramesSequence),
+                         recursive_subclasses(FramesSequenceND))
+    # keep handlers that support the file ext. use set to avoid duplicates.
+    extensions = set(ext for h in all_handlers for ext in map(drop_dot, h.class_exts()))
+
+    return extensions
 
 
 def to_rgb_uint8(image, autoscale=True):
