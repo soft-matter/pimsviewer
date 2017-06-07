@@ -722,13 +722,13 @@ class Viewer(QtWidgets.QMainWindow):
     @memoize
     def _get_all_files_in_dir(directory, extensions=None):
         if extensions is None:
-            return sorted(
-                [f for f in listdir(directory) if isfile(join(directory, f))],
-                key=natural_keys)
+            file_list = [f for f in listdir(directory) if isfile(join(directory, f))]
+
         else:
-            return sorted([f for f in listdir(directory) if
-                           isfile(join(directory, f)) and drop_dot(os.path.splitext(f)[1]) in extensions],
-                          key=natural_keys)
+            file_list = [f for f in listdir(directory) if isfile(join(directory, f))
+                         and drop_dot(os.path.splitext(f)[1]) in extensions]
+
+        return sorted(file_list, key=natural_keys)
 
     #
     # def to_frame(self):
