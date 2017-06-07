@@ -13,6 +13,7 @@ import numpy as np
 import pims
 from pims import FramesSequence, FramesSequenceND
 from pims.utils.sort import natural_keys
+from pims.display import export_moviepy
 
 from .widgets import CheckBox, DockWidget, VideoTimer, Slider
 from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
@@ -91,8 +92,8 @@ class Viewer(QtWidgets.QMainWindow):
         self.file_menu.addAction('Open previous', self.open_previous_file,
                                  Qt.ALT + Qt.SHIFT + Qt.Key_O)
         self.file_menu.addAction('Close', self.close_reader)
-        # self.file_menu.addAction('Save', self.save_file,
-        #                          Qt.CTRL + Qt.Key_S)
+        self.file_menu.addAction('Export', self.save_file,
+                                 Qt.CTRL + Qt.Key_S)
         self.file_menu.addAction('Copy', self.to_clipboard,
                                  Qt.CTRL + Qt.Key_C)
         self.file_menu.addAction('Quit', self.close,
@@ -711,50 +712,54 @@ class Viewer(QtWidgets.QMainWindow):
     def _get_all_files_in_dir(directory):
         return sorted([f for f in listdir(directory) if isfile(join(directory, f))], key=natural_keys)
 
-    #
+
     # def to_frame(self):
     #     return Frame(rgb_view(self.to_pixmap().toImage()),
     #                  frame_no=self.index['t'])
-    #
-    # def save_file(self, filename=None):
-    #     str_filter = ";;".join(['All files (*.*)',
-    #                             'H264 video (*.avi)',
-    #                             'MPEG4 video (*.mp4 *.mov)',
-    #                             'Windows Media Player video (*.wmv)'])
-    #
-    #
-    #     if VideoClip is None:
-    #         raise ImportError('The MoviePy exporter requires moviepy to work.')
-    #
-    #     if filename is None:
-    #         try:
-    #             cur_dir = os.path.dirname(self.reader.filename)
-    #         except AttributeError:
-    #             cur_dir = ''
-    #         filename = QtWidgets.QFileDialog.getSaveFileName(self,
-    #                                                          "Export Movie",
-    #                                                          cur_dir,
-    #                                                          str_filter)
-    #         if isinstance(filename, tuple):
-    #             # Handle discrepancy between PyQt4 and PySide APIs.
-    #             filename = filename[0]
-    #
-    #     _, ext = os.path.splitext(os.path.basename(filename))
-    #     ext = ext[1:].lower()
-    #     if ext == 'wmv':
-    #         codec = 'wmv2'
-    #     else:
-    #         codec = None  # let moviepy decide
-    #     if ext == '':
-    #         filename += '.mp4'
-    #
-    #     try:
-    #         rate = self.reader.frame_rate
-    #     except AttributeError:
-    #         rate = 25
-    #
-    #     self.reader.iter_axes = ['t']
-    #     self.status = 'Saving to {}'.format(filename)
-    #     pims.export(self.reader, filename, rate, codec=codec)
-    #     self.update_image()
-    #     self.status = 'Done saving {}'.format(filename)
+
+    def save_file(self, filename=None, rate=None, **kwargs):
+        """For a list of kwargs, see pims.export"""
+        # TODO Save the canvas instead of the reader (including annotations)
+        presets = dict(avi=dict(codec='libx264', quality=23),
+                       mp4=dict(codec='mpeg4', quality=5),
+                       mov=dict(codec='mpeg4', quality=5),
+                       wmv=dict(codec='wmv2', quality=0.005))
+
+        str_filter = ";;".join(['All files (*.*)',
+                                'H264 video (*.avi)',
+                                'MPEG4 video (*.mp4 *.mov)',
+                                'Windows Media Player video (*.wmv)'])
+
+        if filename is None:
+            try:
+                cur_dir = os.path.dirname(self.reader.filename)
+            except AttributeError:
+                cur_dir = ''
+            filename = QtWidgets.QFileDialog.getSaveFileName(self,
+                                                             "Export Movie",
+                                                             cur_dir,
+                                                             str_filter)
+            if isinstance(filename, tuple):
+                # Handle discrepancy between PyQt4 and PySide APIs.
+                filename = filename[0]
+
+        ext = os.path.splitext(filename)[-1]
+        if ext[0] == '.':
+            ext = ext[1:]
+        try:
+            _kwargs = presets[ext]
+        except KeyError:
+            raise ValueError("Extension '.{}' is not a known format.".format(ext))
+
+        _kwargs.update(kwargs)
+
+        if rate is None:
+            try:
+                rate = float(self.reader.frame_rate)
+            except AttributeError or ValueError:
+                rate = 25.
+
+        self.reader.iter_axes = 't'
+        self.status = 'Saving to {}'.format(filename)
+        export_moviepy(self.reader, filename, rate, **kwargs)
+        self.status = 'Done saving {}'.format(filename)
