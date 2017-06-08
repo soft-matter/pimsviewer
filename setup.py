@@ -15,11 +15,11 @@ except ImportError:
 
 setup_parameters = dict(
     name="pimsviewer",
-    version='0.1',
-    description="PIMS viewer",
+    version='1.0',
+    description="Viewer for Python IMage Sequence (PIMS).",
     author="Casper van der Wel",
     author_email="caspervdw@gmail.com",
-    url="https://bitbucket.org/caspervdw/pimsviewer",
+    url="https://github.com/soft-matter/pimsviewer",
     install_requires=['scikit-image>=0.11', 'matplotlib', 'pims>=0.4'],
     packages=['pimsviewer'],
     long_description=descr,
