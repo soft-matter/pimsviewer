@@ -15,7 +15,7 @@ from matplotlib.pyplot import imsave
 import pims
 from pims import FramesSequence, FramesSequenceND, pipeline
 from pims.utils.sort import natural_keys
-from pims.display import export_moviepy, to_rgb
+from pims.display import export_moviepy
 
 from .widgets import CheckBox, DockWidget, VideoTimer, Slider
 from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
@@ -791,5 +791,8 @@ class Viewer(QtWidgets.QMainWindow):
 
         self.reader.iter_axes = 't'
         self.status = 'Saving to {}'.format(filename)
+
+        # we specifically use export_moviepy, as PIMS v0.4 export() has a bug
+        # when a new release of PIMS is available, this should be changed back
         export_moviepy(pipeline(to_rgb_uint8)(self.reader), filename, rate, **kwargs)
         self.status = 'Done saving {}'.format(filename)
