@@ -11,9 +11,9 @@ import warnings
 
 import numpy as np
 import pims
-from pims import FramesSequence, FramesSequenceND
+from pims import FramesSequence, FramesSequenceND, pipeline
 from pims.utils.sort import natural_keys
-from pims.display import export_moviepy
+from pims.display import export_moviepy, to_rgb
 
 from .widgets import CheckBox, DockWidget, VideoTimer, Slider
 from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
@@ -761,5 +761,10 @@ class Viewer(QtWidgets.QMainWindow):
 
         self.reader.iter_axes = 't'
         self.status = 'Saving to {}'.format(filename)
-        export_moviepy(self.reader, filename, rate, **kwargs)
+        if self.is_multichannel:
+            reader_rgb = pipeline(to_rgb)(self.reader)
+        else:
+            reader_rgb = self.reader
+
+        export_moviepy(reader_rgb, filename, rate, **kwargs)
         self.status = 'Done saving {}'.format(filename)
