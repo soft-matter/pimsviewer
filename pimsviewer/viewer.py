@@ -10,6 +10,8 @@ from itertools import chain
 import warnings
 
 import numpy as np
+from matplotlib.pyplot import imsave
+
 import pims
 from pims import FramesSequence, FramesSequenceND, pipeline
 from pims.utils.sort import natural_keys
@@ -92,7 +94,9 @@ class Viewer(QtWidgets.QMainWindow):
         self.file_menu.addAction('Open previous', self.open_previous_file,
                                  Qt.ALT + Qt.SHIFT + Qt.Key_O)
         self.file_menu.addAction('Close', self.close_reader)
-        self.file_menu.addAction('Export', self.save_file,
+        self.file_menu.addAction('Export image', self.export_image,
+                                 Qt.CTRL + Qt.SHIFT + Qt.Key_S)
+        self.file_menu.addAction('Export video', self.export_video,
                                  Qt.CTRL + Qt.Key_S)
         self.file_menu.addAction('Copy', self.to_clipboard,
                                  Qt.CTRL + Qt.Key_C)
@@ -717,7 +721,33 @@ class Viewer(QtWidgets.QMainWindow):
     #     return Frame(rgb_view(self.to_pixmap().toImage()),
     #                  frame_no=self.index['t'])
 
-    def save_file(self, filename=None, rate=None, **kwargs):
+    def export_image(self, filename=None, **kwargs):
+        """For a list of kwargs, see pims.export"""
+        # TODO Save the canvas instead of the reader (including annotations)
+        str_filter = ";;".join(['All files (*.*)',
+                                'PNG image (*.png)',
+                                'JPEG image (*.jpg)',
+                                'TIFF image (*.tif)',
+                                'Bitmap image (*.bmp)'])
+
+        if filename is None:
+            try:
+                cur_dir = os.path.dirname(self.reader.filename)
+            except AttributeError:
+                cur_dir = ''
+            filename = QtWidgets.QFileDialog.getSaveFileName(self,
+                                                             "Export Image",
+                                                             cur_dir,
+                                                             str_filter)
+            if isinstance(filename, tuple):
+                # Handle discrepancy between PyQt4 and PySide APIs.
+                filename = filename[0]
+
+        self.status = 'Saving to {}'.format(filename)
+        imsave(filename, to_rgb_uint8(self.image), **kwargs)
+        self.status = 'Done saving {}'.format(filename)
+
+    def export_video(self, filename=None, rate=None, **kwargs):
         """For a list of kwargs, see pims.export"""
         # TODO Save the canvas instead of the reader (including annotations)
         presets = dict(avi=dict(codec='libx264', quality=23),
@@ -761,10 +791,5 @@ class Viewer(QtWidgets.QMainWindow):
 
         self.reader.iter_axes = 't'
         self.status = 'Saving to {}'.format(filename)
-        if self.is_multichannel:
-            reader_rgb = pipeline(to_rgb)(self.reader)
-        else:
-            reader_rgb = self.reader
-
-        export_moviepy(reader_rgb, filename, rate, **kwargs)
+        export_moviepy(pipeline(to_rgb_uint8)(self.reader), filename, rate, **kwargs)
         self.status = 'Done saving {}'.format(filename)
