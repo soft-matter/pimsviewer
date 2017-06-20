@@ -10,7 +10,7 @@ from itertools import chain
 import warnings
 
 import numpy as np
-from matplotlib.pyplot import imsave
+from PIL import Image
 
 import pims
 from pims import FramesSequence, FramesSequenceND, pipeline
@@ -744,7 +744,7 @@ class Viewer(QtWidgets.QMainWindow):
                 filename = filename[0]
 
         self.status = 'Saving to {}'.format(filename)
-        imsave(filename, to_rgb_uint8(self.image), **kwargs)
+        Image.fromarray(to_rgb_uint8(self.image)).save(filename)
         self.status = 'Done saving {}'.format(filename)
 
     def export_video(self, filename=None, rate=None, **kwargs):
