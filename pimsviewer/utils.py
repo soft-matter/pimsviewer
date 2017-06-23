@@ -4,7 +4,9 @@ from __future__ import (absolute_import, division, print_function,
 import functools
 
 import numpy as np
-from pims import FramesSequenceND, to_rgb, normalize
+from pims import Frame, to_rgb, normalize
+from pims.base_frames import FramesSequence, FramesSequenceND
+from itertools import chain
 
 
 def recursive_subclasses(cls):
@@ -12,6 +14,23 @@ def recursive_subclasses(cls):
     # Source: http://stackoverflow.com/a/3862957/1221924
     return (cls.__subclasses__() +
             [g for s in cls.__subclasses__() for g in recursive_subclasses(s)])
+
+
+def drop_dot(s):
+    if s.startswith('.'):
+        return s[1:]
+    else:
+        return s
+
+
+def get_supported_extensions():
+    # list all readers derived from the pims baseclasses
+    all_handlers = chain(recursive_subclasses(FramesSequence),
+                         recursive_subclasses(FramesSequenceND))
+    # keep handlers that support the file ext. use set to avoid duplicates.
+    extensions = set(ext for h in all_handlers for ext in map(drop_dot, h.class_exts()))
+
+    return extensions
 
 
 def to_rgb_uint8(image, autoscale=True, force_color=None):
@@ -24,10 +43,10 @@ def to_rgb_uint8(image, autoscale=True, force_color=None):
     except (AttributeError, KeyError):
         colors = None
 
-    grayscale = False
     # 2D, grayscale
     if ndim == 2:
-        grayscale = True
+        force_color = [force_color] if force_color is not None else None
+        image = to_rgb(image, force_color)
     # 2D non-interleaved RGB
     elif ndim == 3 and shape[0] in [3, 4]:
         image = image.transpose([1, 2, 0])
@@ -55,13 +74,6 @@ def to_rgb_uint8(image, autoscale=True, force_color=None):
         image = to_rgb(image, None, True)
     else:
         raise ValueError("No display possible for frames of shape {0}".format(shape))
-
-    if grayscale:
-        if force_color is not None and len(force_color) == 3:
-            force_color = normalize(np.array(force_color))
-            image = np.dstack((force_color[0] * image, force_color[1] * image, force_color[2] * image))
-        else:
-            image = np.repeat(image[..., np.newaxis], 3, axis=image.ndim)
 
     if autoscale:
         image = (normalize(image) * 255).astype(np.uint8)

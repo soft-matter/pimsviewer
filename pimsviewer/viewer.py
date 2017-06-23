@@ -6,19 +6,23 @@ from os import listdir, path
 from os.path import isfile, join
 from functools import partial
 from itertools import chain
+from fractions import Fraction
 import warnings
 
 import numpy as np
+from PIL import Image
+
 import pims
-from pims import FramesSequence, FramesSequenceND
+from pims import FramesSequence, FramesSequenceND, pipeline
 from pims.utils.sort import natural_keys
+from pims import export
 
 from .widgets import CheckBox, DockWidget, VideoTimer, Slider
 from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
                  init_qtapp, start_qtapp)
 from .display import Display
 from .utils import (wrap_frames_sequence, recursive_subclasses,
-                    to_rgb_uint8, memoize)
+                    to_rgb_uint8, memoize, get_supported_extensions, drop_dot)
 
 try:
     with warnings.catch_warnings():
@@ -90,8 +94,10 @@ class Viewer(QtWidgets.QMainWindow):
         self.file_menu.addAction('Open previous', self.open_previous_file,
                                  Qt.ALT + Qt.SHIFT + Qt.Key_O)
         self.file_menu.addAction('Close', self.close_reader)
-        # self.file_menu.addAction('Save', self.save_file,
-        #                          Qt.CTRL + Qt.Key_S)
+        self.file_menu.addAction('Export image', self.export_image,
+                                 Qt.CTRL + Qt.SHIFT + Qt.Key_S)
+        self.file_menu.addAction('Export video', self.export_video,
+                                 Qt.CTRL + Qt.Key_S)
         self.file_menu.addAction('Copy', self.to_clipboard,
                                  Qt.CTRL + Qt.Key_C)
         self.file_menu.addAction('Quit', self.close,
@@ -108,10 +114,10 @@ class Viewer(QtWidgets.QMainWindow):
         # Color menu
         self._available_colors = {
             'Greyscale': None,
-            'Magenta': [255, 0, 255],
-            'Green': [0, 255, 0],
-            'Cyan': [0, 255, 255],
-            'Red': [255, 0, 0]
+            'Magenta': [1, 0, 1],
+            'Green': [0, 1, 0],
+            'Cyan': [0, 1, 1],
+            'Red': [1, 0, 0]
         }
         self.force_color = None
         self._color_menu = self._generate_color_menu()
@@ -239,15 +245,24 @@ class Viewer(QtWidgets.QMainWindow):
                 filename = filename[0]
         if filename is None or len(filename) == 0:
             return
+
         if reader_cls is None:
-            reader = pims.open(filename)
+            try:
+                reader = pims.open(filename)
+            except pims.api.UnknownFormatError:
+                reader = None
         else:
             reader = reader_cls(filename)
+
         if self.reader is not None:
             self.close_reader()
-        self.update_reader(reader)
-        self.status = 'Opened {}'.format(filename)
-        self.filename = filename
+
+        if reader is not None:
+            self.update_reader(reader)
+            self.status = 'Opened {}'.format(filename)
+            self.filename = filename
+        else:
+            self.status = 'No suitable reader was found to open {}'.format(filename)
 
     def open_next_file(self, forward=True):
         """
@@ -262,8 +277,10 @@ class Viewer(QtWidgets.QMainWindow):
         if self.filename is None:
             self.open_file()
 
+        supported_extensions = get_supported_extensions()
+
         current_directory = path.dirname(self.filename)
-        file_list = self._get_all_files_in_dir(current_directory)
+        file_list = self._get_all_files_in_dir(current_directory, extensions=supported_extensions)
         if len(file_list) < 2:
             self.status = 'No file found for opening'
             return
@@ -351,11 +368,12 @@ class Viewer(QtWidgets.QMainWindow):
             display_class = Display
 
         shape = [self.reader.sizes['y'], self.reader.sizes['x']]
-        if display_class.ndim == 3:
-            try:
-                shape = [self.reader.sizes['z']] + shape
-            except KeyError:
-                raise KeyError('z axis does not exist: cannot display in 3D')
+        if display_class.ndim == 3 and 'z' in self.reader.sizes:
+            shape = [self.reader.sizes['z']] + shape
+        elif display_class.ndim == 3:
+            # Display class does not support 2D images
+            display_class = Display
+            self.status = 'Requested display mode only supports 3D images'
 
         if self._display is not None:
             self._display.close()
@@ -516,7 +534,7 @@ class Viewer(QtWidgets.QMainWindow):
 
     @autoscale.setter
     def autoscale(self, value):
-        return self._autoscale.setChecked(value)
+        self._autoscale.setChecked(value)
 
     def close_reader(self):
         """Close the current reader"""
@@ -726,8 +744,14 @@ class Viewer(QtWidgets.QMainWindow):
 
     @staticmethod
     @memoize
-    def _get_all_files_in_dir(directory):
-        return sorted([f for f in listdir(directory) if isfile(join(directory, f))], key=natural_keys)
+    def _get_all_files_in_dir(directory, extensions=None):
+        if extensions is None:
+            file_list = [f for f in listdir(directory) if isfile(join(directory, f))]
+        else:
+            file_list = [f for f in listdir(directory) if isfile(join(directory, f))
+                         and drop_dot(os.path.splitext(f)[1]) in extensions]
+
+        return sorted(file_list, key=natural_keys)
 
     def update_color_mode(self, color=None):
         """Updates the color mode (full color/greyscale) of the current image.
@@ -753,50 +777,84 @@ class Viewer(QtWidgets.QMainWindow):
                 color_action.setChecked(True)
         return color_menu
 
-    #
-    # def to_frame(self):
-    #     return Frame(rgb_view(self.to_pixmap().toImage()),
-    #                  frame_no=self.index['t'])
-    #
-    # def save_file(self, filename=None):
-    #     str_filter = ";;".join(['All files (*.*)',
-    #                             'H264 video (*.avi)',
-    #                             'MPEG4 video (*.mp4 *.mov)',
-    #                             'Windows Media Player video (*.wmv)'])
-    #
-    #
-    #     if VideoClip is None:
-    #         raise ImportError('The MoviePy exporter requires moviepy to work.')
-    #
-    #     if filename is None:
-    #         try:
-    #             cur_dir = os.path.dirname(self.reader.filename)
-    #         except AttributeError:
-    #             cur_dir = ''
-    #         filename = QtWidgets.QFileDialog.getSaveFileName(self,
-    #                                                          "Export Movie",
-    #                                                          cur_dir,
-    #                                                          str_filter)
-    #         if isinstance(filename, tuple):
-    #             # Handle discrepancy between PyQt4 and PySide APIs.
-    #             filename = filename[0]
-    #
-    #     _, ext = os.path.splitext(os.path.basename(filename))
-    #     ext = ext[1:].lower()
-    #     if ext == 'wmv':
-    #         codec = 'wmv2'
-    #     else:
-    #         codec = None  # let moviepy decide
-    #     if ext == '':
-    #         filename += '.mp4'
-    #
-    #     try:
-    #         rate = self.reader.frame_rate
-    #     except AttributeError:
-    #         rate = 25
-    #
-    #     self.reader.iter_axes = ['t']
-    #     self.status = 'Saving to {}'.format(filename)
-    #     pims.export(self.reader, filename, rate, codec=codec)
-    #     self.update_image()
-    #     self.status = 'Done saving {}'.format(filename)
+    def export_image(self, filename=None, **kwargs):
+        """For a list of kwargs, see pims.export"""
+        # TODO Save the canvas instead of the reader (including annotations)
+        str_filter = ";;".join(['All files (*.*)',
+                                'PNG image (*.png)',
+                                'JPEG image (*.jpg)',
+                                'TIFF image (*.tif)',
+                                'Bitmap image (*.bmp)'])
+
+        if filename is None:
+            try:
+                cur_dir = os.path.dirname(self.reader.filename)
+            except AttributeError:
+                cur_dir = ''
+            filename = QtWidgets.QFileDialog.getSaveFileName(self,
+                                                             "Export Image",
+                                                             cur_dir,
+                                                             str_filter)
+            if isinstance(filename, tuple):
+                # Handle discrepancy between PyQt4 and PySide APIs.
+                filename = filename[0]
+
+        self.status = 'Saving to {}'.format(filename)
+        Image.fromarray(to_rgb_uint8(self.image, autoscale=self.autoscale, force_color=self.force_color)).save(filename)
+        self.status = 'Done saving {}'.format(filename)
+
+    def export_video(self, filename=None, rate=None, **kwargs):
+        """For a list of kwargs, see pims.export"""
+        # TODO Save the canvas instead of the reader (including annotations)
+        presets = dict(avi=dict(codec='libx264', quality=23),
+                       mp4=dict(codec='mpeg4', quality=5),
+                       mov=dict(codec='mpeg4', quality=5),
+                       wmv=dict(codec='wmv2', quality=0.005))
+
+        str_filter = ";;".join(['All files (*.*)',
+                                'H264 video (*.avi)',
+                                'MPEG4 video (*.mp4 *.mov)',
+                                'Windows Media Player video (*.wmv)'])
+
+        if filename is None:
+            try:
+                cur_dir = os.path.dirname(self.reader.filename)
+            except AttributeError:
+                cur_dir = ''
+            filename = QtWidgets.QFileDialog.getSaveFileName(self,
+                                                             "Export Movie",
+                                                             cur_dir,
+                                                             str_filter)
+            if isinstance(filename, tuple):
+                # Handle discrepancy between PyQt4 and PySide APIs.
+                filename = filename[0]
+
+        ext = os.path.splitext(filename)[-1]
+        if ext[0] == '.':
+            ext = ext[1:]
+        try:
+            _kwargs = presets[ext]
+        except KeyError:
+            raise ValueError("Extension '.{}' is not a known format.".format(ext))
+
+        _kwargs.update(kwargs)
+
+        if rate is None:
+            try:
+                rate = float(self.reader.frame_rate)
+            except AttributeError or ValueError:
+                rate = 25.
+
+        self.reader.iter_axes = 't'
+        self.status = 'Saving to {}'.format(filename)
+
+        # PIMS v0.4 export() has a bug having to do with float precision
+        # fix that here using limit_denominator() from fractions
+        export(pipeline(to_rgb_uint8)(self.reader), filename,
+               Fraction(rate).limit_denominator(66535), **kwargs)
+        self.status = 'Done saving {}'.format(filename)
+
+        #
+        # def to_frame(self):
+        #     return Frame(rgb_view(self.to_pixmap().toImage()),
+        #                  frame_no=self.index['t'])
