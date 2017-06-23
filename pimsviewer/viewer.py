@@ -1,7 +1,6 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-import six
 import os
 from os import listdir, path
 from os.path import isfile, join
@@ -105,6 +104,18 @@ class Viewer(QtWidgets.QMainWindow):
         self._autoscale.setChecked(True)
         self._autoscale.toggled.connect(self.update_view)
         self.view_menu.addAction(self._autoscale)
+
+        # Color menu
+        self._available_colors = {
+            'Greyscale': None,
+            'Magenta': [255, 0, 255],
+            'Green': [0, 255, 0],
+            'Cyan': [0, 255, 255],
+            'Red': [255, 0, 0]
+        }
+        self.force_color = None
+        self._color_menu = self._generate_color_menu()
+        self.view_menu.addMenu(self._color_menu)
 
         # list all Display subclasses in the View menu
         mode_menu = QtWidgets.QMenu('&Mode', self)
@@ -415,9 +426,16 @@ class Viewer(QtWidgets.QMainWindow):
         if self.image is None:
             return
 
-        self._display.update_image(to_rgb_uint8(self.image,
-                                                autoscale=self.autoscale))
+        self._display.update_image(to_rgb_uint8(self.image, autoscale=self.autoscale, force_color=self.force_color))
         self.original_image_changed.emit()
+        self._disable_or_enable_menus()
+
+    def _disable_or_enable_menus(self):
+        """Disable/Enable menu actions based on the current image"""
+        if self.image is None or self.is_multichannel:
+            self._color_menu.setDisabled(True)
+        else:
+            self._color_menu.setEnabled(True)
 
     @property
     def original_image(self):
@@ -710,6 +728,30 @@ class Viewer(QtWidgets.QMainWindow):
     @memoize
     def _get_all_files_in_dir(directory):
         return sorted([f for f in listdir(directory) if isfile(join(directory, f))], key=natural_keys)
+
+    def update_color_mode(self, color=None):
+        """Updates the color mode (full color/greyscale) of the current image.
+        """
+        self.force_color = self._available_colors[color]
+        self.update_view()
+
+    def _generate_color_menu(self):
+        """Generate the menu for selecting the color mode.
+    
+        Returns:
+            QtWidgets.QMenu: the color selection menu
+        """
+        color_menu = QtWidgets.QMenu('&Color', self)
+        color_menu.setDisabled(True)
+        color_group = QtWidgets.QActionGroup(color_menu)
+        for color in self._available_colors:
+            color_action = QtWidgets.QAction(color, color_menu, checkable=True)
+            color_action.toggled.connect(partial(self.update_color_mode, color=color))
+            color_group.addAction(color_action)
+            color_menu.addAction(color_action)
+            if color == 'Greyscale':
+                color_action.setChecked(True)
+        return color_menu
 
     #
     # def to_frame(self):

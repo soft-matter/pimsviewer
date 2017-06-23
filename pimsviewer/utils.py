@@ -4,7 +4,7 @@ from __future__ import (absolute_import, division, print_function,
 import functools
 
 import numpy as np
-from pims import Frame, FramesSequenceND, to_rgb, normalize
+from pims import FramesSequenceND, to_rgb, normalize
 
 
 def recursive_subclasses(cls):
@@ -14,7 +14,7 @@ def recursive_subclasses(cls):
             [g for s in cls.__subclasses__() for g in recursive_subclasses(s)])
 
 
-def to_rgb_uint8(image, autoscale=True):
+def to_rgb_uint8(image, autoscale=True, force_color=None):
     ndim = image.ndim
     shape = image.shape
     try:
@@ -56,6 +56,13 @@ def to_rgb_uint8(image, autoscale=True):
     else:
         raise ValueError("No display possible for frames of shape {0}".format(shape))
 
+    if grayscale:
+        if force_color is not None and len(force_color) == 3:
+            force_color = normalize(np.array(force_color))
+            image = np.dstack((force_color[0] * image, force_color[1] * image, force_color[2] * image))
+        else:
+            image = np.repeat(image[..., np.newaxis], 3, axis=image.ndim)
+
     if autoscale:
         image = (normalize(image) * 255).astype(np.uint8)
     elif not np.issubdtype(image.dtype, np.uint8):
@@ -69,9 +76,6 @@ def to_rgb_uint8(image, autoscale=True):
             if image.max() > 1:  # unnormalized floats! normalize anyway
                 image = normalize(image)
             image = (image * 255).astype(np.uint8)
-
-    if grayscale:
-        image = np.repeat(image[..., np.newaxis], 3, axis=image.ndim)
 
     return image
 
