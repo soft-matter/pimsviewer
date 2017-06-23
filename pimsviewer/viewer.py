@@ -23,7 +23,7 @@ from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
                  init_qtapp, start_qtapp)
 from .display import Display
 from .utils import (wrap_frames_sequence, recursive_subclasses,
-                    to_rgb_uint8, memoize)
+                    to_rgb_uint8, memoize, get_supported_extensions, drop_dot)
 
 try:
     with warnings.catch_warnings():
@@ -234,15 +234,24 @@ class Viewer(QtWidgets.QMainWindow):
                 filename = filename[0]
         if filename is None or len(filename) == 0:
             return
+
         if reader_cls is None:
-            reader = pims.open(filename)
+            try:
+                reader = pims.open(filename)
+            except pims.api.UnknownFormatError:
+                reader = None
         else:
             reader = reader_cls(filename)
+
         if self.reader is not None:
             self.close_reader()
-        self.update_reader(reader)
-        self.status = 'Opened {}'.format(filename)
-        self.filename = filename
+
+        if reader is not None:
+            self.update_reader(reader)
+            self.status = 'Opened {}'.format(filename)
+            self.filename = filename
+        else:
+            self.status = 'No suitable reader was found to open {}'.format(filename)
 
     def open_next_file(self, forward=True):
         """
@@ -257,8 +266,10 @@ class Viewer(QtWidgets.QMainWindow):
         if self.filename is None:
             self.open_file()
 
+        supported_extensions = get_supported_extensions()
+
         current_directory = path.dirname(self.filename)
-        file_list = self._get_all_files_in_dir(current_directory)
+        file_list = self._get_all_files_in_dir(current_directory, extensions=supported_extensions)
         if len(file_list) < 2:
             self.status = 'No file found for opening'
             return
@@ -346,11 +357,12 @@ class Viewer(QtWidgets.QMainWindow):
             display_class = Display
 
         shape = [self.reader.sizes['y'], self.reader.sizes['x']]
-        if display_class.ndim == 3:
-            try:
-                shape = [self.reader.sizes['z']] + shape
-            except KeyError:
-                raise KeyError('z axis does not exist: cannot display in 3D')
+        if display_class.ndim == 3 and 'z' in self.reader.sizes:
+            shape = [self.reader.sizes['z']] + shape
+        elif display_class.ndim == 3:
+            # Display class does not support 2D images
+            display_class = Display
+            self.status = 'Requested display mode only supports 3D images'
 
         if self._display is not None:
             self._display.close()
@@ -714,8 +726,15 @@ class Viewer(QtWidgets.QMainWindow):
 
     @staticmethod
     @memoize
-    def _get_all_files_in_dir(directory):
-        return sorted([f for f in listdir(directory) if isfile(join(directory, f))], key=natural_keys)
+    def _get_all_files_in_dir(directory, extensions=None):
+        if extensions is None:
+            file_list = [f for f in listdir(directory) if isfile(join(directory, f))]
+
+        else:
+            file_list = [f for f in listdir(directory) if isfile(join(directory, f))
+                         and drop_dot(os.path.splitext(f)[1]) in extensions]
+
+        return sorted(file_list, key=natural_keys)
 
 
     # def to_frame(self):
