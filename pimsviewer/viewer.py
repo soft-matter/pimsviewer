@@ -120,7 +120,16 @@ class Viewer(QtWidgets.QMainWindow):
             'Red': [1, 0, 0]
         }
         self.force_color = None
-        self._color_menu = self._generate_color_menu()
+        self._color_menu = QtWidgets.QMenu('&Color', self)
+        self._color_menu.setDisabled(True)
+        color_group = QtWidgets.QActionGroup(self._color_menu)
+        for color in self._available_colors:
+            color_action = QtWidgets.QAction(color, self._color_menu, checkable=True)
+            color_action.toggled.connect(partial(self.update_color_mode, color=color))
+            color_group.addAction(color_action)
+            self._color_menu.addAction(color_action)
+            if color == 'Greyscale':
+                color_action.setChecked(True)
         self.view_menu.addMenu(self._color_menu)
 
         # list all Display subclasses in the View menu
@@ -759,24 +768,6 @@ class Viewer(QtWidgets.QMainWindow):
         self.force_color = self._available_colors[color]
         self.update_view()
 
-    def _generate_color_menu(self):
-        """Generate the menu for selecting the color mode.
-    
-        Returns:
-            QtWidgets.QMenu: the color selection menu
-        """
-        color_menu = QtWidgets.QMenu('&Color', self)
-        color_menu.setDisabled(True)
-        color_group = QtWidgets.QActionGroup(color_menu)
-        for color in self._available_colors:
-            color_action = QtWidgets.QAction(color, color_menu, checkable=True)
-            color_action.toggled.connect(partial(self.update_color_mode, color=color))
-            color_group.addAction(color_action)
-            color_menu.addAction(color_action)
-            if color == 'Greyscale':
-                color_action.setChecked(True)
-        return color_menu
-
     def export_image(self, filename=None, **kwargs):
         """For a list of kwargs, see pims.export"""
         # TODO Save the canvas instead of the reader (including annotations)
@@ -850,7 +841,7 @@ class Viewer(QtWidgets.QMainWindow):
 
         # PIMS v0.4 export() has a bug having to do with float precision
         # fix that here using limit_denominator() from fractions
-        export(pipeline(to_rgb_uint8)(self.reader), filename,
+        export(pipeline(to_rgb_uint8)(self.reader, autoscale=self.autoscale, force_color=self.force_color), filename,
                Fraction(rate).limit_denominator(66535), **kwargs)
         self.status = 'Done saving {}'.format(filename)
 
