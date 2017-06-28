@@ -5,5 +5,7 @@ except ImportError(ND2Reader):
 
 from pimsviewer import Viewer
 
-viewer = Viewer()
-viewer.show()
+
+def run():
+    viewer = Viewer()
+    viewer.show()

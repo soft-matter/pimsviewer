@@ -24,6 +24,11 @@ setup_parameters = dict(
                       'pillow'],
     packages=['pimsviewer'],
     long_description=descr,
+    entry_points={
+        'gui_scripts': [
+            'pimsviewer=pimsviewer.run_gui:run',
+        ],
+    },
 )
 
 setup(**setup_parameters)
