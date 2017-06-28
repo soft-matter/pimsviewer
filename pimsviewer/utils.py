@@ -9,6 +9,21 @@ from pims.base_frames import FramesSequence, FramesSequenceND
 from itertools import chain
 
 
+def memoize(obj):
+    """Memoize the function call result"""
+    cache = obj.cache = {}
+
+    @functools.wraps(obj)
+    def memoizer(*args, **kwargs):
+        """Memoize by storing the results in a dict"""
+        key = str(args) + str(kwargs)
+        if key not in cache:
+            cache[key] = obj(*args, **kwargs)
+        return cache[key]
+
+    return memoizer
+
+
 def recursive_subclasses(cls):
     "Return all subclasses (and their subclasses, etc.)."
     # Source: http://stackoverflow.com/a/3862957/1221924
@@ -21,6 +36,14 @@ def drop_dot(s):
         return s[1:]
     else:
         return s
+
+
+@memoize
+def get_available_readers():
+    readers = set(chain(recursive_subclasses(FramesSequence),
+                        recursive_subclasses(FramesSequenceND)))
+    readers = [cls for cls in readers if not hasattr(cls, 'no_reader')]
+    return readers
 
 
 def get_supported_extensions():
@@ -175,18 +198,3 @@ class ND_Wrapper(FramesSequenceND):
 
     def __getattr__(self, attr):
         return getattr(self._reader, attr)
-
-
-def memoize(obj):
-    """Memoize the function call result"""
-    cache = obj.cache = {}
-
-    @functools.wraps(obj)
-    def memoizer(*args, **kwargs):
-        """Memoize by storing the results in a dict"""
-        key = str(args) + str(kwargs)
-        if key not in cache:
-            cache[key] = obj(*args, **kwargs)
-        return cache[key]
-
-    return memoizer

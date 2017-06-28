@@ -23,7 +23,7 @@ from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
                  init_qtapp, start_qtapp)
 from .display import Display
 from .utils import (wrap_frames_sequence, recursive_subclasses,
-                    to_rgb_uint8, memoize, get_supported_extensions, drop_dot)
+                    to_rgb_uint8, memoize, get_supported_extensions, drop_dot, get_available_readers)
 
 try:
     with warnings.catch_warnings():
@@ -79,10 +79,7 @@ class Viewer(QtWidgets.QMainWindow):
 
         # list all pims reader classed in the "Open with" menu
         open_with_menu = QtWidgets.QMenu('Open with', self)
-        for cls in set(chain(recursive_subclasses(FramesSequence),
-                             recursive_subclasses(FramesSequenceND))):
-            if hasattr(cls, 'no_reader'):
-                continue
+        for cls in get_available_readers():
             open_with_menu.addAction(cls.__name__,
                                      partial(self.open_file, reader_cls=cls))
 
