@@ -682,13 +682,13 @@ class Viewer(QtWidgets.QMainWindow):
             elif key == Qt.Key_Escape:
                 self._display.set_fullscreen(False)
             elif key == Qt.Key_Plus:
-                if hasattr(self.renderer, 'zoom'):
+                if hasattr(self._display, 'zoom'):
                     self._display.zoom(1)
             elif key == Qt.Key_Minus:
-                if hasattr(self.renderer, 'zoom'):
+                if hasattr(self._display, 'zoom'):
                     self._display.zoom(-1)
-            elif key == Qt.Key_R:
-                if hasattr(self.renderer, 'zoom'):
+            elif key == Qt.Key_0:
+                if hasattr(self._display, 'zoom'):
                     self._display.zoom()
             elif key == Qt.Key_Z:
                 self.undo.emit()
