@@ -232,6 +232,7 @@ class Viewer(QtWidgets.QMainWindow):
         if filename is None or len(filename) == 0:
             return
 
+        filename = path.abspath(filename)
         if reader_cls is None:
             try:
                 reader = pims.open(filename)
