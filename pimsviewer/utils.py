@@ -33,7 +33,7 @@ def get_supported_extensions():
     return extensions
 
 
-def to_rgb_uint8(image, autoscale=True):
+def to_rgb_uint8(image, autoscale=True, force_color=None):
     ndim = image.ndim
     shape = image.shape
     try:
@@ -43,10 +43,10 @@ def to_rgb_uint8(image, autoscale=True):
     except (AttributeError, KeyError):
         colors = None
 
-    grayscale = False
     # 2D, grayscale
     if ndim == 2:
-        grayscale = True
+        force_color = [force_color] if force_color is not None else None
+        image = to_rgb(image, force_color)
     # 2D non-interleaved RGB
     elif ndim == 3 and shape[0] in [3, 4]:
         image = image.transpose([1, 2, 0])
@@ -88,9 +88,6 @@ def to_rgb_uint8(image, autoscale=True):
             if image.max() > 1:  # unnormalized floats! normalize anyway
                 image = normalize(image)
             image = (image * 255).astype(np.uint8)
-
-    if grayscale:
-        image = np.repeat(image[..., np.newaxis], 3, axis=image.ndim)
 
     return image
 
