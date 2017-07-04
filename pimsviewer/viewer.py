@@ -1,7 +1,6 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-import six
 import os
 from os import listdir, path
 from os.path import isfile, join
@@ -108,6 +107,27 @@ class Viewer(QtWidgets.QMainWindow):
         self._autoscale.setChecked(True)
         self._autoscale.toggled.connect(self.update_view)
         self.view_menu.addAction(self._autoscale)
+
+        # Color menu
+        self._available_colors = {
+            'Greyscale': None,
+            'Magenta': [1, 0, 1],
+            'Green': [0, 1, 0],
+            'Cyan': [0, 1, 1],
+            'Red': [1, 0, 0]
+        }
+        self.force_color = None
+        self._color_menu = QtWidgets.QMenu('&Color', self)
+        self._color_menu.setDisabled(True)
+        color_group = QtWidgets.QActionGroup(self._color_menu)
+        for color in self._available_colors:
+            color_action = QtWidgets.QAction(color, self._color_menu, checkable=True)
+            color_action.toggled.connect(partial(self.update_color_mode, color=color))
+            color_group.addAction(color_action)
+            self._color_menu.addAction(color_action)
+            if color == 'Greyscale':
+                color_action.setChecked(True)
+        self.view_menu.addMenu(self._color_menu)
 
         # list all Display subclasses in the View menu
         mode_menu = QtWidgets.QMenu('&Mode', self)
@@ -431,9 +451,16 @@ class Viewer(QtWidgets.QMainWindow):
         if self.image is None:
             return
 
-        self._display.update_image(to_rgb_uint8(self.image,
-                                                autoscale=self.autoscale))
+        self._display.update_image(to_rgb_uint8(self.image, autoscale=self.autoscale, force_color=self.force_color))
         self.original_image_changed.emit()
+        self._disable_or_enable_menus()
+
+    def _disable_or_enable_menus(self):
+        """Disable/Enable menu actions based on the current image"""
+        if self.image is None or self.is_multichannel:
+            self._color_menu.setDisabled(True)
+        else:
+            self._color_menu.setEnabled(True)
 
     @property
     def original_image(self):
@@ -514,7 +541,7 @@ class Viewer(QtWidgets.QMainWindow):
 
     @autoscale.setter
     def autoscale(self, value):
-        return self._autoscale.setChecked(value)
+        self._autoscale.setChecked(value)
 
     def close_reader(self):
         """Close the current reader"""
@@ -727,17 +754,17 @@ class Viewer(QtWidgets.QMainWindow):
     def _get_all_files_in_dir(directory, extensions=None):
         if extensions is None:
             file_list = [f for f in listdir(directory) if isfile(join(directory, f))]
-
         else:
             file_list = [f for f in listdir(directory) if isfile(join(directory, f))
                          and drop_dot(os.path.splitext(f)[1]) in extensions]
 
         return sorted(file_list, key=natural_keys)
 
-
-    # def to_frame(self):
-    #     return Frame(rgb_view(self.to_pixmap().toImage()),
-    #                  frame_no=self.index['t'])
+    def update_color_mode(self, color=None):
+        """Updates the color mode (full color/greyscale) of the current image.
+        """
+        self.force_color = self._available_colors[color]
+        self.update_view()
 
     def export_image(self, filename=None, **kwargs):
         """For a list of kwargs, see pims.export"""
@@ -762,7 +789,7 @@ class Viewer(QtWidgets.QMainWindow):
                 filename = filename[0]
 
         self.status = 'Saving to {}'.format(filename)
-        Image.fromarray(to_rgb_uint8(self.image)).save(filename)
+        Image.fromarray(to_rgb_uint8(self.image, autoscale=self.autoscale, force_color=self.force_color)).save(filename)
         self.status = 'Done saving {}'.format(filename)
 
     def export_video(self, filename=None, rate=None, **kwargs):
@@ -812,6 +839,11 @@ class Viewer(QtWidgets.QMainWindow):
 
         # PIMS v0.4 export() has a bug having to do with float precision
         # fix that here using limit_denominator() from fractions
-        export(pipeline(to_rgb_uint8)(self.reader), filename,
+        export(pipeline(to_rgb_uint8)(self.reader, autoscale=self.autoscale, force_color=self.force_color), filename,
                Fraction(rate).limit_denominator(66535), **kwargs)
         self.status = 'Done saving {}'.format(filename)
+
+        #
+        # def to_frame(self):
+        #     return Frame(rgb_view(self.to_pixmap().toImage()),
+        #                  frame_no=self.index['t'])
