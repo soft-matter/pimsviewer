@@ -53,6 +53,8 @@ class Viewer(QtWidgets.QMainWindow):
     # signal on image change, so that plotting plugins can process the change
     original_image_changed = Signal()
 
+    window_title = "Python IMage Sequence Viewer"
+
     def __init__(self, reader=None, close_reader=True):
         self.plugins = []
         self._images = []
@@ -74,7 +76,7 @@ class Viewer(QtWidgets.QMainWindow):
         super(Viewer, self).__init__()
 
         self.setAttribute(Qt.WA_DeleteOnClose)
-        self.setWindowTitle("Python IMage Sequence Viewer")
+        self.setWindowTitle(self.window_title)
 
         # list all pims reader classed in the "Open with" menu
         open_with_menu = QtWidgets.QMenu('Open with', self)
@@ -269,6 +271,7 @@ class Viewer(QtWidgets.QMainWindow):
         if reader is not None:
             self.update_reader(reader)
             self.status = 'Opened {}'.format(filename)
+            self.setWindowTitle('{} - '.format(path.basename(filename)) + self.window_title)
             self.filename = filename
         else:
             self.status = 'No suitable reader was found to open {}'.format(filename)
