@@ -5,6 +5,7 @@ import six
 from pimsviewer.qt import Qt, QtWidgets, QtCore, QtGui, Signal
 from time import time
 import math
+import numpy as np
 
 from skimage.viewer.widgets import BaseWidget, CheckBox, Text, ComboBox
 
