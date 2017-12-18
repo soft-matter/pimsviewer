@@ -1,11 +1,27 @@
 # pimsviewer
-A graphical user interface (GUI) for PIMS
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/pimsviewer/badges/version.svg)](https://anaconda.org/conda-forge/pimsviewer)
+
+A graphical user interface (GUI) for PIMS (screenshot below)
 
 This viewer was based on `skimage.viewer.CollectionViewer` ([docs](http://scikit-image.org/docs/dev/user_guide/viewer.html))
 and is able to work with N-dimensional image files that are opened by PIMS.
 
 Also, it exposes a matplotlib plotting area on which images can be (dynamically)
 annotated, making use of the `Plugin` infrastructure.
+
+## Installation
+
+Pimsviewer can be installed using conda:
+
+```
+conda install -c conda-forge pimsviewer
+```
+
+Alternatively, it can also be installed using pip:
+
+```
+pip install pimsviewer 
+```
 
 ## Starting the viewer
 
@@ -110,3 +126,7 @@ Locate += Slider('minmass', 1, 10000, 100, value_type='int', orientation='vertic
 viewer = Viewer(reader) + Locate
 viewer.show()
 ```
+
+## Screenshot
+
+![Screenshot](/screenshot.png?raw=true)
