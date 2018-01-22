@@ -47,8 +47,6 @@ class Display(object):
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
-        self.canvas.mpl_connect('key_press_event', self.on_key_press)
-        self.canvas.mpl_connect('key_release_event', self.on_key_release)
 
         self.canvas.setFocusPolicy(Qt.ClickFocus)
         self.canvas.setFocus()
@@ -198,14 +196,8 @@ class Display(object):
         elif 'z' in self.viewer.sizes:
             self.viewer.set_index(self.viewer.index['z'] - int(event.step), 'z')
 
-    def on_key_press(self, event):
-        if event.key == 'control':
-            self.control_is_held = True
-
-    def on_key_release(self, event):
-        if event.key == 'control':
-            self.control_is_held = False
-
+    def toggle_control_key(self):
+        self.control_is_held = not self.control_is_held
 
 class Display_MIP(Display):
     name = 'Max intensity projection'

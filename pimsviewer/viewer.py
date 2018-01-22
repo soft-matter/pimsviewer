@@ -728,6 +728,8 @@ class Viewer(QtWidgets.QMainWindow):
                 self.resize_display(factor=1)
             elif key == Qt.Key_D:
                 self.resize_display(factor=2)
+            elif key == Qt.Key_Control:
+                self._display.toggle_control_key()
             else:
                 event.ignore()
         else:
