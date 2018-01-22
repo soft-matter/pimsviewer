@@ -19,7 +19,7 @@ from pims import export
 
 from .widgets import CheckBox, DockWidget, VideoTimer, Slider
 from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
-                 init_qtapp, start_qtapp)
+                 init_qtapp, start_qtapp, NavigationToolbar)
 from .display import Display
 from .utils import (wrap_frames_sequence, recursive_subclasses,
                     to_rgb_uint8, memoize, get_supported_extensions, drop_dot, get_available_readers)
@@ -177,6 +177,8 @@ class Viewer(QtWidgets.QMainWindow):
         self.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
                            QtWidgets.QSizePolicy.Preferred)
         self.main_layout = QtWidgets.QGridLayout(self.main_widget)
+
+        self.mpl_toolbar = None
 
         # make file dragging & dropping work
         self.setAcceptDrops(True)
@@ -392,7 +394,9 @@ class Viewer(QtWidgets.QMainWindow):
         self.canvas.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
                                   QtWidgets.QSizePolicy.Expanding)
         self.canvas.updateGeometry()
-        self.main_layout.addWidget(self.canvas, 0, 0)
+        self.mpl_toolbar = NavigationToolbar(self.canvas, self.main_widget)
+        self.main_layout.addWidget(self.mpl_toolbar, 0, 0)
+        self.main_layout.addWidget(self.canvas, 1, 0)
         self.canvas.keyPressEvent = self.keyPressEvent
         self.update_original_image()
 
@@ -709,15 +713,6 @@ class Viewer(QtWidgets.QMainWindow):
                 self._display.set_fullscreen()
             elif key == Qt.Key_Escape:
                 self._display.set_fullscreen(False)
-            elif key == Qt.Key_Plus:
-                if hasattr(self._display, 'zoom'):
-                    self._display.zoom(1)
-            elif key == Qt.Key_Minus:
-                if hasattr(self._display, 'zoom'):
-                    self._display.zoom(-1)
-            elif key == Qt.Key_0:
-                if hasattr(self._display, 'zoom'):
-                    self._display.zoom()
             elif key == Qt.Key_Z:
                 self.undo.emit()
             elif key == Qt.Key_Y:
@@ -728,8 +723,6 @@ class Viewer(QtWidgets.QMainWindow):
                 self.resize_display(factor=1)
             elif key == Qt.Key_D:
                 self.resize_display(factor=2)
-            elif key == Qt.Key_Control:
-                self._display.toggle_control_key()
             else:
                 event.ignore()
         else:
