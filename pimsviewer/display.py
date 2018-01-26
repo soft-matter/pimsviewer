@@ -65,27 +65,11 @@ class Display(object):
         self.canvas.close()
 
     def resize(self, w, h):
-        self.set_fullscreen(False)
         self.canvas.resize(w, h)
         self.canvas.updateGeometry()
         self.viewer.main_widget.adjustSize()
         self.viewer.main_widget.updateGeometry()
         self.viewer.adjustSize()
-
-    def set_fullscreen(self, value=None):
-        is_fullscreen = self.canvas.isFullScreen()
-        if value is None:
-            value = not is_fullscreen
-        elif value == is_fullscreen:
-            return
-        if value:
-            self.canvas.setWindowFlags(Qt.Window)
-            self.canvas.setWindowState(Qt.WindowFullScreen)
-            self.canvas.show()
-        else:
-            self.canvas.setWindowState(Qt.WindowNoState)
-            self.canvas.setWindowFlags(Qt.Widget)
-            self.canvas.show()
 
     def on_motion(self, event):
         try:

@@ -5,7 +5,6 @@ import os
 from os import listdir, path
 from os.path import isfile, join
 from functools import partial
-from itertools import chain
 from fractions import Fraction
 import warnings
 
@@ -13,13 +12,13 @@ import numpy as np
 from PIL import Image
 
 import pims
-from pims import FramesSequence, FramesSequenceND, pipeline
+from pims import FramesSequenceND, pipeline
 from pims.utils.sort import natural_keys
 from pims import export
 
 from .widgets import CheckBox, DockWidget, VideoTimer, Slider
 from .qt import (Qt, QtWidgets, QtGui, QtCore, Signal,
-                 init_qtapp, start_qtapp, NavigationToolbar)
+                 init_qtapp, start_qtapp, NavigationToolbar, QShortcut, QKeySequence)
 from .display import Display
 from .utils import (wrap_frames_sequence, recursive_subclasses,
                     to_rgb_uint8, memoize, get_supported_extensions, drop_dot, get_available_readers)
@@ -189,6 +188,8 @@ class Viewer(QtWidgets.QMainWindow):
         # initialize the timer for video playback
         self._timer = VideoTimer(self)
         self._play_checkbox = None
+
+        self.add_keyboard_shortcuts()
 
         if reader is not None:
             self.update_reader(reader)
@@ -397,7 +398,6 @@ class Viewer(QtWidgets.QMainWindow):
         self.mpl_toolbar = NavigationToolbar(self.canvas, self.main_widget)
         self.main_layout.addWidget(self.mpl_toolbar, 0, 0)
         self.main_layout.addWidget(self.canvas, 1, 0)
-        self.canvas.keyPressEvent = self.keyPressEvent
         self.update_original_image()
 
     def update_original_image(self):
@@ -575,8 +575,10 @@ class Viewer(QtWidgets.QMainWindow):
         else:
             self.stop()
 
-    def play(self, start=True, fps=None):
+    def play(self, start=True, fps=None, toggle=False):
         """Control movie playback."""
+        if toggle:
+            start = not self.is_playing
         if self._play_checkbox is not None:
             self._play_checkbox.val = start
         if start == self.is_playing:
@@ -652,81 +654,109 @@ class Viewer(QtWidgets.QMainWindow):
         self.showNormal()  # make sure not to be in maximized mode
         self._display.resize(w, h)
 
-    def keyPressEvent(self, event):
-        if type(event) == QtGui.QKeyEvent:
-            key = event.key()
-            modifiers = event.modifiers()
-            if key in range(0x30, 0x39 + 1):  # number keys: move to deciles
-                index = int(self.reader.sizes['t'] * (key - 48) / 10)
-                self.set_index(index, 't')
-            if key in range(0x01000037,  # F8-F12 keys: change channel
-                            0x0100003b + 1) and 'c' in self.reader.sizes:
-                index = key - 0x01000037
-                print('key pressed to {}'.format(index))
-                if index <= self.reader.sizes['c']:
-                    self.channel_tabs.setCurrentIndex(index)
-            if key in [QtCore.Qt.Key_N, QtCore.Qt.Key_Right]:
-                if modifiers == Qt.NoModifier:
-                    jump = 1
-                elif modifiers == Qt.ShiftModifier:
-                    jump = 10
-                elif modifiers == Qt.ControlModifier:
-                    jump = 25
-                elif modifiers == (Qt.ShiftModifier | Qt.ControlModifier):
-                    jump = 100
-                else:
-                    jump = 0
-                self.set_index(self._index['t'] + jump)
-                event.accept()
-            elif key in [Qt.Key_P, Qt.Key_Left]:
-                if modifiers == Qt.NoModifier:
-                    jump = 1
-                elif modifiers == Qt.ShiftModifier:
-                    jump = 10
-                elif modifiers == Qt.ControlModifier:
-                    jump = 25
-                elif modifiers == (Qt.ShiftModifier | Qt.ControlModifier):
-                    jump = 100
-                else:
-                    jump = 0
-                self.set_index(self._index['t'] - jump)
-                event.accept()
-            elif key == Qt.Key_R:
-                index = np.random.randint(0, self.reader.sizes['t'] - 1)
-                self.set_index(index, 't')
-                event.accept()
-            elif key == Qt.Key_Space:
-                self.play(not self.is_playing)
-                event.accept()
-            elif key == Qt.Key_BracketRight:
-                self.fps *= 1.2
-            elif key == Qt.Key_BracketLeft:
-                self.fps *= 0.8
-            elif key == Qt.Key_Backslash:
-                self.fps *= -1
-            elif key == Qt.Key_Equal:
-                try:
-                    self.fps = self.reader.frame_rate
-                except AttributeError:
-                    self.fps = 25.
-            elif key == Qt.Key_F:
-                self._display.set_fullscreen()
-            elif key == Qt.Key_Escape:
-                self._display.set_fullscreen(False)
-            elif key == Qt.Key_Z:
-                self.undo.emit()
-            elif key == Qt.Key_Y:
-                self.redo.emit()
-            elif key == Qt.Key_A:
-                self.resize_display(factor=1 / 2)
-            elif key == Qt.Key_S:
-                self.resize_display(factor=1)
-            elif key == Qt.Key_D:
-                self.resize_display(factor=2)
-            else:
-                event.ignore()
+    def make_shortcut(self, key, connect):
+        shortcut = QShortcut(QKeySequence(key), self)
+        shortcut.activated.connect(connect)
+
+    def update_t_index_key(self, key, fraction=True, random=False):
+        """
+        Update the time index based on a pressed number key
+        Args:
+            random:
+            fraction:
+            key:
+
+        Returns:
+
+        """
+        if random:
+            key = np.random.random() * 10.0
+
+        if fraction:
+            index = int(self.reader.sizes['t'] * key / 10)
         else:
-            event.ignore()
+            index = int(self._index['t'] + key)
+
+        if index < 0:
+            index = 0
+        elif index >= self.reader.sizes['t']:
+            index = self.reader.sizes['t'] - 1
+
+        self.set_index(index, 't')
+
+    def update_c_index_key(self, key):
+        if key <= self.reader.sizes['c']:
+            self.channel_tabs.setCurrentIndex(key)
+
+    def change_fps_key(self, increment):
+        if increment == 0:
+            try:
+                self.fps = self.reader.frame_rate
+            except AttributeError:
+                self.fps = 25.
+        else:
+            self.fps *= increment
+
+    def set_fullscreen_key(self, escape=False):
+        if not escape:
+            is_fullscreen = self.isFullScreen()
+        else:
+            is_fullscreen = True
+
+        if not is_fullscreen:
+            self.setWindowState(Qt.WindowFullScreen)
+        else:
+            self.setWindowState(Qt.WindowNoState)
+
+    def add_keyboard_shortcuts(self):
+        # number keys: change t index
+        for i in range(10):
+            self.make_shortcut(str(i), partial(self.update_t_index_key, i, True))
+
+        # F8-F12: change channel
+        for i, k in enumerate(('F8', 'F9', 'F10', 'F11', 'F12')):
+            self.make_shortcut(k, partial(self.update_c_index_key, i))
+
+        # n / right keys change time index
+        self.make_shortcut('n', partial(self.update_t_index_key, 1, False))
+        self.make_shortcut('right', partial(self.update_t_index_key, 1, False))
+        self.make_shortcut('shift+n', partial(self.update_t_index_key, 10, False))
+        self.make_shortcut('shift+right', partial(self.update_t_index_key, 10, False))
+        self.make_shortcut('ctrl+n', partial(self.update_t_index_key, 25, False))
+        self.make_shortcut('ctrl+right', partial(self.update_t_index_key, 25, False))
+        self.make_shortcut('ctrl+shift+n', partial(self.update_t_index_key, 100, False))
+        self.make_shortcut('ctrl+shift+right', partial(self.update_t_index_key, 100, False))
+
+        # p / left keys change time index
+        self.make_shortcut('p', partial(self.update_t_index_key, -1, False))
+        self.make_shortcut('left', partial(self.update_t_index_key, -1, False))
+        self.make_shortcut('shift+p', partial(self.update_t_index_key, -10, False))
+        self.make_shortcut('shift+left', partial(self.update_t_index_key, -10, False))
+        self.make_shortcut('ctrl+p', partial(self.update_t_index_key, -25, False))
+        self.make_shortcut('ctrl+left', partial(self.update_t_index_key, -25, False))
+        self.make_shortcut('ctrl+shift+p', partial(self.update_t_index_key, -100, False))
+        self.make_shortcut('ctrl+shift+left', partial(self.update_t_index_key, -100, False))
+
+        # random index
+        self.make_shortcut('r', partial(self.update_t_index_key, 0, True, True))
+
+        # Play/pause
+        self.make_shortcut('space', partial(self.play, toggle=True))
+
+        # Play speed
+        self.make_shortcut(']', partial(self.change_fps_key, 1.2))
+        self.make_shortcut('[', partial(self.change_fps_key, 0.8))
+        self.make_shortcut('\\', partial(self.change_fps_key, -1))
+        self.make_shortcut('=', partial(self.change_fps_key, 0))
+
+        # Fullscreen
+        self.make_shortcut('f', partial(self.set_fullscreen_key))
+        self.make_shortcut('Escape', partial(self.set_fullscreen_key, True))
+
+        # Resizing
+        self.make_shortcut('a', partial(self.resize_display, factor=1 / 2))
+        self.make_shortcut('s', partial(self.resize_display, factor=1))
+        self.make_shortcut('d', partial(self.resize_display, factor=2))
 
     @property
     def status(self):
