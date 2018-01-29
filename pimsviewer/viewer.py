@@ -485,15 +485,24 @@ class Viewer(QtWidgets.QMainWindow):
 
     @property
     def canvas(self):
-        return self._display.canvas
+        try:
+            return self._display.canvas
+        except AttributeError:
+            return None
 
     @property
     def ax(self):
-        return self._display.ax
+        try:
+            return self._display.ax
+        except AttributeError:
+            return None
 
     @property
     def fig(self):
-        return self._display.fig
+        try:
+            return self._display.fig
+        except AttributeError:
+            return None
 
     # Change the current index
 

@@ -1,5 +1,6 @@
 from pimsviewer import Viewer
 from pimsviewer.utils import get_available_readers
+from pimsviewer.plugins import ScaleBarPlugin
 import click
 
 
@@ -14,7 +15,7 @@ def get_available_readers_dict():
 @click.option('--reader-class', type=click.Choice(get_available_readers_dict().keys()),
               help='Reader with which to open the file.')
 def run(file, reader_class):
-    viewer = Viewer()
+    viewer = Viewer() + ScaleBarPlugin()
 
     if file is not None:
         if reader_class is not None:

@@ -4,7 +4,7 @@ from __future__ import (absolute_import, division, print_function,
 import numpy as np
 from .widgets import Text
 from .utils import df_add_row
-from .qt import QtWidgets, QtCore, init_qtapp
+from .qt import QtWidgets, QtCore, init_qtapp, Qt
 from collections import deque
 
 
@@ -61,13 +61,19 @@ class Plugin(QtWidgets.QDialog):
         Widgets can adjust arguments of the pipeline function, as specified by
         the Widget's `ptype`.
         """
-        if widget.ptype == 'kwarg':
+        try:
+            ptype = widget.ptype
+        except AttributeError:
+            ptype = 'arg'
+
+        if ptype == 'kwarg':
             name = widget.name.replace(' ', '_')
             self.keyword_arguments[name] = widget
             widget.callback = self.process
-        elif widget.ptype == 'arg':
+        elif ptype == 'arg':
             self.arguments.append(widget)
             widget.callback = self.process
+
         widget.plugin = self
         self.layout.addWidget(widget, self.row, 0)
         self.row += 1
@@ -128,6 +134,7 @@ class ProcessPlugin(Plugin):
     >>> viewer += AddNoise
     >>> original, noise_added = viewer.show()
     """
+
     def __init__(self, func, name=None, height=0, width=400,
                  dock='bottom'):
         self.func = func
@@ -138,7 +145,6 @@ class ProcessPlugin(Plugin):
             self.name = name
 
         super(ProcessPlugin, self).__init__(height, width, dock)
-
 
     def attach(self, viewer):
         """Attach the pipeline to an ImageViewer.
@@ -174,7 +180,7 @@ class ProcessPlugin(Plugin):
 
     def output(self):
         return dict([(name, self._get_value(a))
-                    for name, a in self.keyword_arguments.items()])
+                     for name, a in self.keyword_arguments.items()])
 
 
 class PlottingPlugin(Plugin):
@@ -283,7 +289,7 @@ class AnnotatePlugin(Plugin):
                     except ValueError:
                         pass
                     else:
-                        texts.append(self.ax.text(x+text_offset, y-text_offset,
+                        texts.append(self.ax.text(x + text_offset, y - text_offset,
                                                   p, **self.text_style))
             self.artist = [self.artist, texts]
         self.canvas.draw_idle()
@@ -383,7 +389,7 @@ class SelectionPlugin(AnnotatePlugin):
                     except ValueError:
                         pass
                     else:
-                        texts.append(self.ax.text(x+text_offset, y-text_offset,
+                        texts.append(self.ax.text(x + text_offset, y - text_offset,
                                                   p, color=color,
                                                   **self.text_style))
             self.artist = [self.artist, texts]
@@ -470,7 +476,7 @@ class SelectionPlugin(AnnotatePlugin):
 
     def on_release(self, event):
         if ((not self.dragging) or (event.inaxes != self.ax)
-                or (self.selected is None) or (event is self._no_click)):
+            or (self.selected is None) or (event is self._no_click)):
             return
         self.dragging = False
         if event.button == 2:
@@ -481,3 +487,110 @@ class SelectionPlugin(AnnotatePlugin):
             if 'particle' in f:
                 f.loc[self.selected, 'particle'] = -1
             self.set_features(f)
+
+
+class ScaleBarPlugin(Plugin):
+    fig = None
+    ax = None
+    canvas = None
+    artist = None
+    name = 'Scale bar'
+    real_length = 2
+    real_unit = 'micron'
+    pixel_per_micron = None
+    padding_px = 10
+    enabled = True
+    showing = False
+    dock = False
+    menu_item = None
+
+    def __init__(self):
+        super().__init__(dock=self.dock)
+
+        self.real_length_layout = QtWidgets.QHBoxLayout()
+        self.real_length_label = QtWidgets.QLabel('Physical length')
+        self.input_real_length = QtWidgets.QLineEdit(str(self.real_length), self)
+        self.real_length_layout.addWidget(self.real_length_label)
+        self.real_length_layout.addWidget(self.input_real_length)
+        self.layout.addLayout(self.real_length_layout, 0, 0)
+
+        self.real_unit_layout = QtWidgets.QHBoxLayout()
+        self.real_unit_label = QtWidgets.QLabel('Physical unit')
+        self.input_real_unit = QtWidgets.QLineEdit(self.real_unit, self)
+        self.real_unit_layout.addWidget(self.real_unit_label)
+        self.real_unit_layout.addWidget(self.input_real_unit)
+        self.layout.addLayout(self.real_unit_layout, 1, 0)
+
+        self.pixel_micron_layout = QtWidgets.QHBoxLayout()
+        self.pixel_micron_label = QtWidgets.QLabel('Pixels / physical length')
+        self.input_pixel_micron = QtWidgets.QLineEdit(self)
+        self.pixel_micron_layout.addWidget(self.pixel_micron_label)
+        self.pixel_micron_layout.addWidget(self.input_pixel_micron)
+        self.layout.addLayout(self.pixel_micron_layout, 2, 0)
+
+        self.row = 3
+
+        self.show_scalebar_checkbox = QtWidgets.QCheckBox('Show scalebar', self)
+        self.add_widget(self.show_scalebar_checkbox)
+
+        self.ok_btn = QtWidgets.QPushButton('OK', self)
+        self.ok_btn.clicked.connect(self.close)
+        self.add_widget(self.ok_btn)
+
+    def attach(self, viewer):
+        super().attach(viewer)
+
+        self.viewer.original_image_changed.connect(self.process)
+
+        self.process()
+
+    def process(self, *widget_arg):
+        kwargs = dict([(name, self._get_value(a))
+                       for name, a in self.keyword_arguments.items()])
+
+        if self.artist is not None:
+            remove_artists(self.artist)
+
+        self.fig = self.viewer.fig
+        self.ax = self.viewer.ax
+        self.canvas = self.viewer.canvas
+        self.artist = self.plot_func(**kwargs)
+
+        if self.menu_item is None:
+            self.menu_item = QtWidgets.QAction('&Scale bar', self.viewer.view_menu)
+            self.menu_item.triggered.connect(self.show_dialog)
+            self.viewer.view_menu.addAction(self.menu_item)
+
+        if self.canvas is not None:
+            self.canvas.draw_idle()
+
+    def plot_func(self, *kwarg):
+        if self.enabled and self.ax is not None and self.pixel_per_micron is not None:
+            size = (self.viewer.sizes['x'], self.viewer.sizes['y'])
+            position = (
+                (size[0] - self.padding_px - self.pixel_per_micron * self.real_length, size[0] - self.padding_px),
+                (size[1] - self.padding_px, size[1] - self.padding_px))
+            self.ax.plot(position[0], position[1], color='white')
+
+    def show_dialog(self):
+        self.showing = True
+        self.show()
+
+    def show(self, main_window=True):
+        if self.showing:
+            super().show(main_window=main_window)
+
+    def closeEvent(self, event):
+        self.showing = False
+        try:
+            self.real_length = float(self.input_real_length.text())
+        except ValueError:
+            pass
+        try:
+            self.pixel_per_micron = float(self.input_pixel_micron.text())
+        except ValueError:
+            pass
+        self.real_unit = self.input_real_unit.text()
+        self.enabled = self.show_scalebar_checkbox.isChecked()
+
+        self.process()
