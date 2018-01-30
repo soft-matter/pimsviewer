@@ -3,7 +3,7 @@ from __future__ import (absolute_import, division, print_function,
 
 import numpy as np
 from .widgets import Text
-from .utils import df_add_row
+from .utils import df_add_row, AnchoredScaleBar
 from .qt import QtWidgets, QtCore, init_qtapp, Qt
 from collections import deque
 
@@ -496,13 +496,14 @@ class ScaleBarPlugin(Plugin):
     artist = None
     name = 'Scale bar'
     real_length = 2
-    real_unit = 'micron'
+    real_unit = 'μm'
     pixel_per_micron = None
     padding_px = 10
     enabled = True
     showing = False
     dock = False
     menu_item = None
+    color = 'white'
 
     def __init__(self):
         super().__init__(dock=self.dock)
@@ -528,7 +529,16 @@ class ScaleBarPlugin(Plugin):
         self.pixel_micron_layout.addWidget(self.input_pixel_micron)
         self.layout.addLayout(self.pixel_micron_layout, 2, 0)
 
-        self.row = 3
+        self.color_layout = QtWidgets.QHBoxLayout()
+        self.color_label = QtWidgets.QLabel('Color')
+        self.input_color = QtWidgets.QComboBox(self)
+        self.input_color.addItem('White', 'white')
+        self.input_color.addItem('Black', 'black')
+        self.color_layout.addWidget(self.color_label)
+        self.color_layout.addWidget(self.input_color)
+        self.layout.addLayout(self.color_layout, 3, 0)
+
+        self.row = 4
 
         self.show_scalebar_checkbox = QtWidgets.QCheckBox('Show scalebar', self)
         self.add_widget(self.show_scalebar_checkbox)
@@ -566,11 +576,18 @@ class ScaleBarPlugin(Plugin):
 
     def plot_func(self, *kwarg):
         if self.enabled and self.ax is not None and self.pixel_per_micron is not None:
-            size = (self.viewer.sizes['x'], self.viewer.sizes['y'])
-            position = (
-                (size[0] - self.padding_px - self.pixel_per_micron * self.real_length, size[0] - self.padding_px),
-                (size[1] - self.padding_px, size[1] - self.padding_px))
-            self.ax.plot(position[0], position[1], color='white')
+            label_text = '%.1f %s' % (self.real_length, self.real_unit)
+            bar_length = self.real_length * self.pixel_per_micron
+            sb = AnchoredScaleBar(self.ax.transData, sizex=bar_length,
+                                  labelx=label_text, barcolor=self.color,
+                                  fontproperties={
+                                      'color': self.color,
+                                      'size': 6
+                                  })
+            self.ax.add_artist(sb)
+            return sb
+
+        return None
 
     def show_dialog(self):
         self.showing = True
@@ -592,5 +609,6 @@ class ScaleBarPlugin(Plugin):
             pass
         self.real_unit = self.input_real_unit.text()
         self.enabled = self.show_scalebar_checkbox.isChecked()
+        self.color = self.input_color.currentData()
 
         self.process()
