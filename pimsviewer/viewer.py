@@ -485,15 +485,24 @@ class Viewer(QtWidgets.QMainWindow):
 
     @property
     def canvas(self):
-        return self._display.canvas
+        try:
+            return self._display.canvas
+        except AttributeError:
+            return None
 
     @property
     def ax(self):
-        return self._display.ax
+        try:
+            return self._display.ax
+        except AttributeError:
+            return None
 
     @property
     def fig(self):
-        return self._display.fig
+        try:
+            return self._display.fig
+        except AttributeError:
+            return None
 
     # Change the current index
 
@@ -696,6 +705,15 @@ class Viewer(QtWidgets.QMainWindow):
                 self.fps = 25.
         else:
             self.fps *= increment
+
+    @property
+    def calibration(self):
+        try:
+            # For ND2Reader
+            calibration = 1.0 / self.reader.metadata['pixel_microns']
+        except AttributeError or KeyError:
+            calibration = None
+        return calibration
 
     def set_fullscreen_key(self, escape=False):
         if not escape:
