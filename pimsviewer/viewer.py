@@ -711,7 +711,7 @@ class Viewer(QtWidgets.QMainWindow):
         try:
             # For ND2Reader
             calibration = 1.0 / self.reader.metadata['pixel_microns']
-        except AttributeError:
+        except AttributeError or KeyError:
             calibration = None
         return calibration
 
