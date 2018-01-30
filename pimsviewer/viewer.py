@@ -706,6 +706,15 @@ class Viewer(QtWidgets.QMainWindow):
         else:
             self.fps *= increment
 
+    @property
+    def calibration(self):
+        try:
+            # For ND2Reader
+            calibration = 1.0 / self.reader.metadata['pixel_microns']
+        except AttributeError:
+            calibration = None
+        return calibration
+
     def set_fullscreen_key(self, escape=False):
         if not escape:
             is_fullscreen = self.isFullScreen()

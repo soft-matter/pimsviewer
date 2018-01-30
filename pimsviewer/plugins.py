@@ -566,6 +566,10 @@ class ScaleBarPlugin(Plugin):
         self.canvas = self.viewer.canvas
         self.artist = self.plot_func(**kwargs)
 
+        if self.viewer.calibration is not None:
+            self.pixel_per_micron = self.viewer.calibration
+            self.input_pixel_micron.setText('%f' % self.pixel_per_micron)
+
         if self.menu_item is None:
             self.menu_item = QtWidgets.QAction('&Scale bar', self.viewer.view_menu)
             self.menu_item.triggered.connect(self.show_dialog)
