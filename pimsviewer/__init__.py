@@ -2,6 +2,7 @@ from .viewer import Viewer
 from .plugins import (Plugin, ProcessPlugin, PlottingPlugin, AnnotatePlugin,
                       SelectionPlugin)
 from .widgets import Button, Slider, CheckBox
+from .run_gui import run
 
 try:
     from pimsviewer.qt import has_qt

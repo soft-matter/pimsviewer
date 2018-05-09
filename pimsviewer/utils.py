@@ -4,6 +4,7 @@ from __future__ import (absolute_import, division, print_function,
 import functools
 
 import numpy as np
+import pims
 from pims import to_rgb, normalize
 from pims.base_frames import FramesSequence, FramesSequenceND
 from itertools import chain
