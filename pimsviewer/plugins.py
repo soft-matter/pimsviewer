@@ -254,7 +254,9 @@ class AnnotatePlugin(Plugin):
         self.canvas = viewer.canvas
 
         self.viewer.original_image_changed.connect(self.process)
-        self.canvas.mpl_connect('pick_event', self.on_pick)
+
+        if self.canvas is not None:
+            self.canvas.mpl_connect('pick_event', self.on_pick)
 
         self._out = Text()
         self.add_widget(self._out)
