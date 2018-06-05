@@ -15,7 +15,7 @@ except ImportError:
 
 setup_parameters = dict(
     name="pimsviewer",
-    version='1.0',
+    version='1.1',
     description="Viewer for Python IMage Sequence (PIMS).",
     author="Casper van der Wel",
     author_email="caspervdw@gmail.com",
