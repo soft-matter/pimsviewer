@@ -132,7 +132,6 @@
             <property name="anchor">w</property>
             <property name="justify">left</property>
             <property name="text" translatable="yes">Ready</property>
-            <property name="textvariable">string:statusbar_text</property>
             <layout>
               <property name="column">0</property>
               <property name="columnspan">2</property>
@@ -154,11 +153,11 @@
         <property name="underline">0</property>
         <child>
           <object class="tk.Menuitem.Command" id="FileOpen">
+            <property name="accelerator">Ctrl+O</property>
             <property name="command">open_file</property>
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Open</property>
             <property name="underline">0</property>
-            <property name="accelerator">Ctrl+O</property>
           </object>
         </child>
         <child>
@@ -170,6 +169,7 @@
         </child>
         <child>
           <object class="tk.Menuitem.Command" id="FileOpenNext">
+            <property name="accelerator">Ctrl+Shift+O</property>
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Open next</property>
             <property name="underline">5</property>
@@ -177,6 +177,7 @@
         </child>
         <child>
           <object class="tk.Menuitem.Command" id="FileOpenPrev">
+            <property name="accelerator">Alt+Shift+O</property>
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Open previous</property>
             <property name="underline">5</property>
@@ -184,12 +185,14 @@
         </child>
         <child>
           <object class="tk.Menuitem.Command" id="FileExport">
+            <property name="accelerator">Ctrl+S</property>
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Export file</property>
           </object>
         </child>
         <child>
           <object class="tk.Menuitem.Command" id="FileClose">
+            <property name="accelerator">Ctrl+W</property>
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Close file</property>
             <property name="underline">0</property>
@@ -200,6 +203,7 @@
         </child>
         <child>
           <object class="tk.Menuitem.Command" id="FileQuit">
+            <property name="accelerator">Ctrl+Q</property>
             <property name="command">quit</property>
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Quit</property>
@@ -215,6 +219,7 @@
         <property name="underline">0</property>
         <child>
           <object class="tk.Menuitem.Command" id="EditCopy">
+            <property name="accelerator">Ctrl+C</property>
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Copy</property>
             <property name="underline">0</property>
