@@ -15,6 +15,21 @@
             <row id="0">
               <property name="weight">1</property>
             </row>
+            <row id="1">
+              <property name="pad">4</property>
+            </row>
+            <row id="2">
+              <property name="pad">2</property>
+            </row>
+            <row id="3">
+              <property name="pad">4</property>
+            </row>
+            <row id="4">
+              <property name="pad">2</property>
+            </row>
+            <row id="5">
+              <property name="pad">2</property>
+            </row>
           </rows>
           <columns>
             <column id="0">
@@ -64,6 +79,8 @@
         <child>
           <object class="ttk.Scale" id="ScaleColor">
             <property name="orient">horizontal</property>
+            <property name="value">0</property>
+            <property name="variable">string:scale_color</property>
             <layout>
               <property name="column">1</property>
               <property name="propagate">True</property>
@@ -88,6 +105,8 @@
         <child>
           <object class="ttk.Scale" id="ScaleFrame">
             <property name="orient">horizontal</property>
+            <property name="value">0</property>
+            <property name="variable">string:scale_frame</property>
             <layout>
               <property name="column">1</property>
               <property name="propagate">True</property>
@@ -131,27 +150,36 @@
     <child>
       <object class="tk.Menuitem.Submenu" id="FileMenu">
         <property name="label" translatable="yes">File</property>
+        <property name="tearoff">false</property>
+        <property name="underline">0</property>
         <child>
           <object class="tk.Menuitem.Command" id="FileOpen">
+            <property name="command">open_file</property>
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Open</property>
+            <property name="underline">0</property>
+            <property name="accelerator">Ctrl+O</property>
           </object>
         </child>
         <child>
           <object class="tk.Menuitem.Submenu" id="FileOpenWith">
             <property name="label" translatable="yes">Open with...</property>
+            <property name="tearoff">false</property>
+            <property name="underline">5</property>
           </object>
         </child>
         <child>
           <object class="tk.Menuitem.Command" id="FileOpenNext">
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Open next</property>
+            <property name="underline">5</property>
           </object>
         </child>
         <child>
           <object class="tk.Menuitem.Command" id="FileOpenPrev">
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Open previous</property>
+            <property name="underline">5</property>
           </object>
         </child>
         <child>
@@ -164,6 +192,7 @@
           <object class="tk.Menuitem.Command" id="FileClose">
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Close file</property>
+            <property name="underline">0</property>
           </object>
         </child>
         <child>
@@ -171,8 +200,10 @@
         </child>
         <child>
           <object class="tk.Menuitem.Command" id="FileQuit">
+            <property name="command">quit</property>
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Quit</property>
+            <property name="underline">0</property>
           </object>
         </child>
       </object>
@@ -180,10 +211,13 @@
     <child>
       <object class="tk.Menuitem.Submenu" id="EditMenu">
         <property name="label" translatable="yes">Edit</property>
+        <property name="tearoff">false</property>
+        <property name="underline">0</property>
         <child>
           <object class="tk.Menuitem.Command" id="EditCopy">
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Copy</property>
+            <property name="underline">0</property>
           </object>
         </child>
       </object>
@@ -191,10 +225,13 @@
     <child>
       <object class="tk.Menuitem.Submenu" id="ViewMenu">
         <property name="label" translatable="yes">View</property>
+        <property name="tearoff">false</property>
+        <property name="underline">0</property>
         <child>
           <object class="tk.Menuitem.Checkbutton" id="ViewAutoscale">
             <property name="command_id_arg">false</property>
             <property name="label" translatable="yes">Autoscale</property>
+            <property name="underline">0</property>
           </object>
         </child>
       </object>

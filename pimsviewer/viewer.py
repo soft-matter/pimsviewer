@@ -4,6 +4,7 @@ try:
 except:
     import Tkinter as tk
 import pygubu
+from tkinter.filedialog import askopenfilename
 
 CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -24,8 +25,22 @@ class Viewer:
         self.mainmenu = menu = builder.get_object('Menu_1', self.mainwindow)
         self.mainwindow.config(menu=menu)
 
+        # 5: Connect callback functions
+        builder.connect_callbacks(self)
+        self.set_accelerators()
+
+        # 6: Program specific code
+        self.filename = None
+
     def quit(self, event=None):
         self.mainwindow.quit()
 
     def run(self):
         self.mainwindow.mainloop()
+
+    def open_file(self, event=None):
+        self.filename = askopenfilename()
+
+    def set_accelerators(self):
+        pass
+
