@@ -47,16 +47,9 @@ class Viewer:
         self.reader = None
 
         # 7: sliders
-        self.frame_scale = self.builder.get_object('ScaleFrame')
-        self.frame_scale_label = self.builder.get_object('ScaleFrameLabel')
-        self.frame_scale.configure(command=self.change_frame_and_channel)
-        self.frame_scale.update()
-        self._job_frame = None
-        self.channel_scale = self.builder.get_object('ScaleColor')
-        self.channel_scale_label = self.builder.get_object('ScaleColorLabel')
-        self.channel_scale.configure(command=self.change_frame_and_channel)
-        self.channel_scale.update()
-        self._job_channel = None
+        self.slider_frame = self.builder.get_object('SliderFrame')
+        self.sliders = []
+        self.configure_sliders()
 
         if self.filename is not None:
             self.open_file()
@@ -79,9 +72,11 @@ class Viewer:
         self.reader = pims.open(self.filename)
         self.show_frame()
         self.update_statusbar()
-        self.update_controls()
+        self.configure_sliders()
 
     def show_frame(self, frame_no=0, channel_no=0):
+        if not hasattr(self.reader, 'sizes'):
+            self.reader.sizes = {}
         if 'c' in self.reader.sizes:
             self.reader.bundle_axes = 'cyx'
             self.ax.imshow(self.reader[frame_no][channel_no])
@@ -89,29 +84,35 @@ class Viewer:
             self.ax.imshow(self.reader[frame_no])
         self.draw_figure()
 
-    def update_controls(self):
-        sizes = self.reader.sizes
-        if 't' in sizes:
-            self.frame_scale.configure(from_=0, to=sizes['t']-1, value=0)
-        if 'c' in sizes:
-            self.channel_scale.configure(from_=0, to=sizes['c']-1, value=0)
+    #def change_frame_and_channel(self, event=None):
+        #if self._job:
+            #self.mainwindow.after_cancel(self._job)
+        #self._job = self.mainwindow.after(200, self._change_frame_and_channel)
+#
+    #def _change_frame_and_channel(self):
+        #frame_no = round(self.frame_scale.get())
+        #channel_no = round(self.channel_scale.get())
+        #self.show_frame(frame_no=frame_no, channel_no=channel_no)
+        #self.frame_scale_label.configure(text='Frame %d/%d' % (frame_no+1, self.reader.sizes['t']))
+        #self.frame_scale_label.update()
+        #self.channel_scale_label.configure(text='Channel %d/%d' % (channel_no+1, self.reader.sizes['c']))
+        #self.channel_scale_label.update()
+        #self._job = None
 
-        self._change_frame_and_channel()
+    def configure_sliders(self):
+        if self.reader is None:
+            return 
 
-    def change_frame_and_channel(self, event=None):
-        if self._job:
-            self.mainwindow.after_cancel(self._job)
-        self._job = self.mainwindow.after(200, self._change_frame_and_channel)
+        if not hasattr(self.reader, 'sizes'):
+            self.reader.sizes = {}
 
-    def _change_frame_and_channel(self):
-        frame_no = round(self.frame_scale.get())
-        channel_no = round(self.channel_scale.get())
-        self.show_frame(frame_no=frame_no, channel_no=channel_no)
-        self.frame_scale_label.configure(text='Frame %d/%d' % (frame_no+1, self.reader.sizes['t']))
-        self.frame_scale_label.update()
-        self.channel_scale_label.configure(text='Channel %d/%d' % (channel_no+1, self.reader.sizes['c']))
-        self.channel_scale_label.update()
-        self._job = None
+        for prop in self.reader.sizes:
+            if prop == 'x' or prop == 'y':
+                continue
+            slider = tk.Scale(self.slider_frame, from_=1, to=self.reader.sizes[prop], resolution=1)
+            self.sliders.append(slider)
+            slider.pack()
+
 
     def update_statusbar(self):
         if self.filename is not None:

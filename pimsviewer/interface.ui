@@ -9,7 +9,7 @@
         <layout>
           <property name="column">2</property>
           <property name="propagate">True</property>
-          <property name="row">6</property>
+          <property name="row">5</property>
           <property name="sticky">nsew</property>
           <rows>
             <row id="0">
@@ -17,6 +17,7 @@
             </row>
             <row id="1">
               <property name="pad">4</property>
+              <property name="weight">0</property>
             </row>
             <row id="2">
               <property name="pad">2</property>
@@ -64,54 +65,14 @@
           </object>
         </child>
         <child>
-          <object class="ttk.Label" id="ScaleColorLabel">
-            <property name="anchor">w</property>
-            <property name="justify">left</property>
-            <property name="text" translatable="yes">Channel</property>
+          <object class="ttk.Frame" id="SliderFrame">
+            <property name="height">200</property>
+            <property name="width">200</property>
             <layout>
               <property name="column">0</property>
+              <property name="columnspan">2</property>
               <property name="propagate">True</property>
               <property name="row">2</property>
-              <property name="sticky">nsew</property>
-            </layout>
-          </object>
-        </child>
-        <child>
-          <object class="ttk.Scale" id="ScaleColor">
-            <property name="orient">horizontal</property>
-            <property name="value">0</property>
-            <property name="variable">string:scale_color</property>
-            <layout>
-              <property name="column">1</property>
-              <property name="propagate">True</property>
-              <property name="row">2</property>
-              <property name="sticky">nsew</property>
-            </layout>
-          </object>
-        </child>
-        <child>
-          <object class="ttk.Label" id="ScaleFrameLabel">
-            <property name="anchor">w</property>
-            <property name="justify">left</property>
-            <property name="text" translatable="yes">Frame</property>
-            <layout>
-              <property name="column">0</property>
-              <property name="propagate">True</property>
-              <property name="row">3</property>
-              <property name="sticky">nsew</property>
-            </layout>
-          </object>
-        </child>
-        <child>
-          <object class="ttk.Scale" id="ScaleFrame">
-            <property name="orient">horizontal</property>
-            <property name="value">0</property>
-            <property name="variable">string:scale_frame</property>
-            <layout>
-              <property name="column">1</property>
-              <property name="propagate">True</property>
-              <property name="row">3</property>
-              <property name="sticky">nsew</property>
             </layout>
           </object>
         </child>
@@ -122,7 +83,7 @@
               <property name="column">0</property>
               <property name="columnspan">2</property>
               <property name="propagate">True</property>
-              <property name="row">4</property>
+              <property name="row">3</property>
               <property name="sticky">nsew</property>
             </layout>
           </object>
@@ -136,7 +97,7 @@
               <property name="column">0</property>
               <property name="columnspan">2</property>
               <property name="propagate">True</property>
-              <property name="row">5</property>
+              <property name="row">4</property>
               <property name="sticky">nsew</property>
             </layout>
           </object>
