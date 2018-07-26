@@ -40,11 +40,26 @@ class Viewer:
         self.set_accelerators()
 
         # 6: Program specific code
-        self.filename = None
+        self.filename = filename
         self.figure, self.ax = self.create_figure()
         self.canvas = builder.get_object('Canvas_1')
         self.photo = None
         self.reader = None
+
+        # 7: sliders
+        self.frame_scale = self.builder.get_object('ScaleFrame')
+        self.frame_scale_label = self.builder.get_object('ScaleFrameLabel')
+        self.frame_scale.configure(command=self.change_frame_and_channel)
+        self.frame_scale.update()
+        self._job_frame = None
+        self.channel_scale = self.builder.get_object('ScaleColor')
+        self.channel_scale_label = self.builder.get_object('ScaleColorLabel')
+        self.channel_scale.configure(command=self.change_frame_and_channel)
+        self.channel_scale.update()
+        self._job_channel = None
+
+        if self.filename is not None:
+            self.open_file()
 
     def create_figure(self):
         fig = mpl.figure.Figure(figsize=(200/dpi, 200/dpi), dpi=dpi)
@@ -59,11 +74,44 @@ class Viewer:
         self.mainwindow.mainloop()
 
     def open_file(self, event=None):
-        self.filename = askopenfilename()
+        if event is not None:
+            self.filename = askopenfilename()
         self.reader = pims.open(self.filename)
-        self.ax.imshow(self.reader[0])
-        self.draw_figure()
+        self.show_frame()
         self.update_statusbar()
+        self.update_controls()
+
+    def show_frame(self, frame_no=0, channel_no=0):
+        if 'c' in self.reader.sizes:
+            self.reader.bundle_axes = 'cyx'
+            self.ax.imshow(self.reader[frame_no][channel_no])
+        else:
+            self.ax.imshow(self.reader[frame_no])
+        self.draw_figure()
+
+    def update_controls(self):
+        sizes = self.reader.sizes
+        if 't' in sizes:
+            self.frame_scale.configure(from_=0, to=sizes['t']-1, value=0)
+        if 'c' in sizes:
+            self.channel_scale.configure(from_=0, to=sizes['c']-1, value=0)
+
+        self._change_frame_and_channel()
+
+    def change_frame_and_channel(self, event=None):
+        if self._job:
+            self.mainwindow.after_cancel(self._job)
+        self._job = self.mainwindow.after(200, self._change_frame_and_channel)
+
+    def _change_frame_and_channel(self):
+        frame_no = round(self.frame_scale.get())
+        channel_no = round(self.channel_scale.get())
+        self.show_frame(frame_no=frame_no, channel_no=channel_no)
+        self.frame_scale_label.configure(text='Frame %d/%d' % (frame_no+1, self.reader.sizes['t']))
+        self.frame_scale_label.update()
+        self.channel_scale_label.configure(text='Channel %d/%d' % (channel_no+1, self.reader.sizes['c']))
+        self.channel_scale_label.update()
+        self._job = None
 
     def update_statusbar(self):
         if self.filename is not None:
