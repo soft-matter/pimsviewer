@@ -23,6 +23,7 @@ from pims.utils.sort import natural_keys
 from os import listdir, path
 from os.path import isfile, join
 from .utils import get_supported_extensions, memoize, drop_dot
+import io
 
 # Remove once PIMS is updated
 try:
@@ -69,6 +70,7 @@ class Viewer:
         self.configure_sliders()
         self._playing = None
         self._play_job = None
+        self.export_dialog = self.builder.get_object('ExportDialog', self.mainwindow)
 
         # 7: Connect callback functions
         builder.connect_callbacks(self)
@@ -349,3 +351,18 @@ class Viewer:
                          and drop_dot(path.splitext(f)[1]) in extensions]
 
         return sorted(file_list, key=natural_keys)
+
+    def show_export_dialog(self):
+        self.export_dialog.show()
+
+    def close_export_dialog(self):
+        self.export_dialog.close()
+
+    def export_file(self):
+        directory = self.builder.get_object('ExportFileChooser').cget('path')
+        filename = self.builder.get_object('ExportFilename').get()
+        self.close_export_dialog()
+        self.update_statusbar(override="Saving file to '%s'..." % filename)
+        # todo implement export
+        self.update_statusbar(override="File saved to '%s'" % filename)
+
