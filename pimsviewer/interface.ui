@@ -7,9 +7,9 @@
     <child>
       <object class="ttk.Frame" id="Frame_1">
         <layout>
-          <property name="column">2</property>
+          <property name="column">0</property>
           <property name="propagate">True</property>
-          <property name="row">5</property>
+          <property name="row">0</property>
           <property name="sticky">nsew</property>
           <rows>
             <row id="0">
@@ -36,19 +36,29 @@
             <column id="0">
               <property name="weight">1</property>
             </column>
-            <column id="1">
-              <property name="weight">2</property>
-            </column>
           </columns>
         </layout>
         <child>
-          <object class="tk.Canvas" id="Canvas_1">
+          <object class="ttk.Frame" id="CanvasFrame">
+            <property name="borderwidth">0</property>
+            <property name="height">200</property>
+            <property name="padding">0</property>
+            <property name="width">200</property>
             <layout>
               <property name="column">0</property>
-              <property name="columnspan">2</property>
               <property name="propagate">True</property>
               <property name="row">0</property>
               <property name="sticky">nsew</property>
+              <rows>
+                <row id="0">
+                  <property name="weight">1</property>
+                </row>
+              </rows>
+              <columns>
+                <column id="0">
+                  <property name="weight">1</property>
+                </column>
+              </columns>
             </layout>
           </object>
         </child>
@@ -57,7 +67,6 @@
             <property name="orient">horizontal</property>
             <layout>
               <property name="column">0</property>
-              <property name="columnspan">2</property>
               <property name="propagate">True</property>
               <property name="row">1</property>
               <property name="sticky">nsew</property>
@@ -70,9 +79,9 @@
             <property name="width">200</property>
             <layout>
               <property name="column">0</property>
-              <property name="columnspan">2</property>
               <property name="propagate">True</property>
               <property name="row">2</property>
+              <property name="sticky">nsew</property>
             </layout>
           </object>
         </child>
@@ -81,7 +90,6 @@
             <property name="orient">horizontal</property>
             <layout>
               <property name="column">0</property>
-              <property name="columnspan">2</property>
               <property name="propagate">True</property>
               <property name="row">3</property>
               <property name="sticky">nsew</property>
@@ -95,7 +103,6 @@
             <property name="text" translatable="yes">Ready</property>
             <layout>
               <property name="column">0</property>
-              <property name="columnspan">2</property>
               <property name="propagate">True</property>
               <property name="row">4</property>
               <property name="sticky">nsew</property>
@@ -379,6 +386,7 @@
       <property name="column">0</property>
       <property name="propagate">True</property>
       <property name="row">2</property>
+      <property name="sticky">nsew</property>
       <rows>
         <row id="0">
           <property name="weight">1</property>
@@ -455,6 +463,7 @@
           <property name="column">3</property>
           <property name="propagate">True</property>
           <property name="row">0</property>
+          <property name="sticky">nsew</property>
         </layout>
       </object>
     </child>
