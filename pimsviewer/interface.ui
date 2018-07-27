@@ -195,20 +195,6 @@
         </child>
       </object>
     </child>
-    <child>
-      <object class="tk.Menuitem.Submenu" id="ViewMenu">
-        <property name="label" translatable="yes">View</property>
-        <property name="tearoff">false</property>
-        <property name="underline">0</property>
-        <child>
-          <object class="tk.Menuitem.Checkbutton" id="ViewAutoscale">
-            <property name="command_id_arg">false</property>
-            <property name="label" translatable="yes">Autoscale</property>
-            <property name="underline">0</property>
-          </object>
-        </child>
-      </object>
-    </child>
   </object>
   <object class="ttk.Frame" id="ChannelFrame">
     <property name="height">200</property>
@@ -283,6 +269,17 @@
         <property name="tickinterval">0.0</property>
         <layout>
           <property name="column">3</property>
+          <property name="propagate">True</property>
+          <property name="row">0</property>
+        </layout>
+      </object>
+    </child>
+    <child>
+      <object class="ttk.Checkbutton" id="ChannelMerge">
+        <property name="command">change_merge_channels</property>
+        <property name="text" translatable="yes">Merge</property>
+        <layout>
+          <property name="column">4</property>
           <property name="propagate">True</property>
           <property name="row">0</property>
         </layout>

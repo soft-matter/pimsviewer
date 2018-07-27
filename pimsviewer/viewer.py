@@ -8,6 +8,7 @@ except ImportError: # Python 2
     import ttk
     import tkFont as font
 
+import numpy as np
 import pygubu
 from tkinter.filedialog import askopenfilename
 import matplotlib as mpl
@@ -17,6 +18,7 @@ mpl.use("TkAgg")
 import matplotlib.backends.tkagg as tkagg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import pims
+from pims.display import to_rgb
 
 from nd2reader import ND2Reader
 
@@ -46,6 +48,7 @@ class Viewer:
         # 5: Program specific code
         self.filename = filename
         self.figure, self.ax = self.create_figure()
+        self.image = None
         self.canvas_frame = builder.get_object('CanvasFrame')
         self.canvas = self.init_canvas()
         self.photo = None
@@ -61,7 +64,6 @@ class Viewer:
 
         # 7: Connect callback functions
         builder.connect_callbacks(self)
-        self.mainwindow.bind("<Configure>", self.resize)
         self.set_accelerators()
 
         if self.filename is not None:
@@ -85,9 +87,20 @@ class Viewer:
             if len(self.filename) == 0:
                 return
         self.reader = pims.open(self.filename)
+        self.image = None
         self.show_frame()
         self.update_statusbar()
         self.init_sliders()
+
+    def merge_channels(self, frame_no=0, z_no=0):
+        if 'z' in self.reader.sizes:
+            self.reader.bundle_axes = 'czyx'
+            frame = self.reader[frame_no][:, z_no, :, :, :]
+            return to_rgb(frame)
+        else:
+            self.reader.bundle_axes = 'cyx'
+            frame = self.reader[frame_no][:, :, :]
+            return to_rgb(frame)
 
     def show_frame(self):
         frame_no = self.sliders['t']['current'] - 1
@@ -97,19 +110,29 @@ class Viewer:
         if not hasattr(self.reader, 'sizes'):
             self.reader.sizes = {}
         if 'c' in self.reader.sizes:
-            if 'z' in self.reader.sizes:
-                self.reader.bundle_axes = 'czyx'
-                self.ax.imshow(self.reader[frame_no][channel_no, z_no, :, :])
+            merge = 'selected' in self.sliders['c']['merge_btn'].state()
+            if merge:
+                self._imshow(self.merge_channels(frame_no, z_no))
             else:
-                self.reader.bundle_axes = 'cyx'
-                self.ax.imshow(self.reader[frame_no][channel_no, :, :])
+                if 'z' in self.reader.sizes:
+                    self.reader.bundle_axes = 'czyx'
+                    self._imshow(self.reader[frame_no][channel_no, z_no, :, :])
+                else:
+                    self.reader.bundle_axes = 'cyx'
+                    self._imshow(self.reader[frame_no][channel_no, :, :])
         else:
             if 'z' in self.reader.sizes:
                 self.reader.bundle_axes = 'zyx'
-                self.ax.imshow(self.reader[frame_no][z_no, :, :])
+                self._imshow(self.reader[frame_no][z_no, :, :])
             else:
-                self.ax.imshow(self.reader[frame_no])
-        self.draw_figure()
+                self._imshow(self.reader[frame_no])
+        self.canvas.draw()
+
+    def _imshow(self, image):
+        if self.image is None:
+            self.image = self.ax.imshow(image, interpolation='none')
+        else:
+            self.image.set_data(image)
 
     def on_slider_change(self, event=None):
         if self._slider_job:
@@ -168,9 +191,11 @@ class Viewer:
                 'value_label': self.builder.get_object('ChannelValue'),
                 'play_btn': self.builder.get_object('ChannelPlayBtn'),
                 'slider': self.builder.get_object('ChannelScale'),
+                'merge_btn': self.builder.get_object('ChannelMerge'),
                 'current': 1,
                 'fps': fps
         }
+        self.sliders['c']['merge_btn'].invoke()
 
         self.sliders['t'] = {
                 'frame': self.builder.get_object('TimeFrame', self.slider_frame),
@@ -208,21 +233,12 @@ class Viewer:
 
     def init_canvas(self):
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.canvas_frame)
-        self.canvas.draw_idle()
         self.canvas.get_tk_widget().grid(row=0, column=0, pady=0, padx=0, sticky='nsew')
         return self.canvas
-
-    def draw_figure(self):
-        cpw, cph = self.canvas.get_width_height()
-        self.figure.set_size_inches(cpw/self._dpi, cph/self._dpi, forward=True)
-        self.canvas.draw_idle()
 
     def set_accelerators(self):
         self.mainwindow.bind_all("<Control-q>", self.quit)
         self.mainwindow.bind_all("<Control-o>", self.open_file)
-
-    def resize(self, event=None):
-        self.draw_figure()
 
     def toggle_play_time(self):
         self.toggle_play('t')
@@ -267,3 +283,6 @@ class Viewer:
         self.show_frame()
 
         self._play_job = self.mainwindow.after(timeout, self.play, timeout, prop)
+
+    def change_merge_channels(self):
+        self.mainwindow.after(0, self.show_frame)
