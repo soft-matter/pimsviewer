@@ -34,22 +34,23 @@ class Viewer:
 
         self.statusbar = builder.get_object('StatusBar')
 
-        # 5: Connect callback functions
-        builder.connect_callbacks(self)
-        self.mainwindow.bind("<Configure>", self.resize)
-        self.set_accelerators()
-
-        # 6: Program specific code
+        # 5: Program specific code
         self.filename = filename
         self.figure, self.ax = self.create_figure()
         self.canvas = builder.get_object('Canvas_1')
         self.photo = None
         self.reader = None
 
-        # 7: sliders
+        # 6: sliders
+        self._slider_job = None
         self.slider_frame = self.builder.get_object('SliderFrame')
-        self.sliders = []
+        self.sliders = {}
         self.configure_sliders()
+
+        # 7: Connect callback functions
+        builder.connect_callbacks(self)
+        self.mainwindow.bind("<Configure>", self.resize)
+        self.set_accelerators()
 
         if self.filename is not None:
             self.open_file()
@@ -69,12 +70,17 @@ class Viewer:
     def open_file(self, event=None):
         if event is not None:
             self.filename = askopenfilename()
+            if len(self.filename) == 0:
+                return
         self.reader = pims.open(self.filename)
         self.show_frame()
         self.update_statusbar()
-        self.configure_sliders()
+        self.init_sliders()
 
-    def show_frame(self, frame_no=0, channel_no=0):
+    def show_frame(self):
+        frame_no = self.sliders['t']['current'] - 1
+        channel_no = self.sliders['c']['current'] - 1
+
         if not hasattr(self.reader, 'sizes'):
             self.reader.sizes = {}
         if 'c' in self.reader.sizes:
@@ -84,35 +90,72 @@ class Viewer:
             self.ax.imshow(self.reader[frame_no])
         self.draw_figure()
 
-    #def change_frame_and_channel(self, event=None):
-        #if self._job:
-            #self.mainwindow.after_cancel(self._job)
-        #self._job = self.mainwindow.after(200, self._change_frame_and_channel)
-#
-    #def _change_frame_and_channel(self):
-        #frame_no = round(self.frame_scale.get())
-        #channel_no = round(self.channel_scale.get())
-        #self.show_frame(frame_no=frame_no, channel_no=channel_no)
-        #self.frame_scale_label.configure(text='Frame %d/%d' % (frame_no+1, self.reader.sizes['t']))
-        #self.frame_scale_label.update()
-        #self.channel_scale_label.configure(text='Channel %d/%d' % (channel_no+1, self.reader.sizes['c']))
-        #self.channel_scale_label.update()
-        #self._job = None
+    def on_slider_change(self, event=None):
+        if self._slider_job:
+            self.mainwindow.after_cancel(self._slider_job)
+        self._slider_job = self.mainwindow.after(200, self._on_slider_change)
 
-    def configure_sliders(self):
+    def _on_slider_change(self):
+        for prop in self.sliders.keys():
+            if prop in self.reader.sizes and self.reader.sizes[prop] > 1:
+                value = int(round(self.sliders[prop]['slider'].get()))
+                if value != self.sliders[prop]['current']:
+                    self.sliders[prop]['value_label'].configure(text='%d/%d' % (value, self.reader.sizes[prop]))
+                    self.sliders[prop]['value_label'].update()
+                    self.sliders[prop]['current'] = value
+        
+        self.show_frame()
+        self._slider_job = None
+
+    def init_sliders(self):
         if self.reader is None:
-            return 
+            self.hide_all_sliders()
 
         if not hasattr(self.reader, 'sizes'):
-            self.reader.sizes = {}
+            self.hide_all_sliders()
 
-        for prop in self.reader.sizes:
-            if prop == 'x' or prop == 'y':
-                continue
-            slider = tk.Scale(self.slider_frame, from_=1, to=self.reader.sizes[prop], resolution=1)
-            self.sliders.append(slider)
-            slider.pack()
+        for prop in self.sliders.keys():
+            if prop not in self.reader.sizes or self.reader.sizes[prop] <= 1:
+                self.sliders[prop]['frame'].grid_remove()
+                self.sliders[prop]['frame'].update()
+            else:
+                self.sliders[prop]['frame'].grid()
+                self.sliders[prop]['frame'].update()
+                self.sliders[prop]['value_label'].configure(text='%d/%d' % (1, self.reader.sizes[prop]))
+                self.sliders[prop]['value_label'].update()
+                self.sliders[prop]['slider'].configure(from_=1, to=self.reader.sizes[prop])
+                self.sliders[prop]['slider'].update()
 
+    def hide_all_sliders(self):
+        for prop in self.sliders.keys():
+            self.sliders[prop]['frame'].grid_remove()
+
+    def configure_sliders(self):
+        self.sliders['c'] = {
+                'frame': self.builder.get_object('ChannelFrame', self.slider_frame),
+                'value_label': self.builder.get_object('ChannelValue'),
+                'play_btn': self.builder.get_object('ChannelPlayBtn'),
+                'slider': self.builder.get_object('ChannelScale'),
+                'current': 1
+        }
+
+        self.sliders['t'] = {
+                'frame': self.builder.get_object('TimeFrame', self.slider_frame),
+                'value_label': self.builder.get_object('TimeValue'),
+                'play_btn': self.builder.get_object('TimePlayBtn'),
+                'slider': self.builder.get_object('TimeScale'),
+                'current': 1
+        }
+
+        self.sliders['z'] = {
+                'frame': self.builder.get_object('ZFrame', self.slider_frame),
+                'value_label': self.builder.get_object('ZValue'),
+                'play_btn': self.builder.get_object('ZPlayBtn'),
+                'slider': self.builder.get_object('ZScale'),
+                'current': 1
+        }
+
+        self.hide_all_sliders()
 
     def update_statusbar(self):
         if self.filename is not None:
