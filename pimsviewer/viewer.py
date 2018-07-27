@@ -1,8 +1,13 @@
 import os
 try:
     import tkinter as tk
-except:
+    import tkinter.ttk as ttk
+    import tkinter.font as font
+except ImportError: # Python 2
     import Tkinter as tk
+    import ttk
+    import tkFont as font
+
 import pygubu
 from tkinter.filedialog import askopenfilename
 import matplotlib as mpl
@@ -46,6 +51,7 @@ class Viewer:
         self.slider_frame = self.builder.get_object('SliderFrame')
         self.sliders = {}
         self.configure_sliders()
+        self._playing = None
 
         # 7: Connect callback functions
         builder.connect_callbacks(self)
@@ -95,7 +101,11 @@ class Viewer:
             self.mainwindow.after_cancel(self._slider_job)
         self._slider_job = self.mainwindow.after(200, self._on_slider_change)
 
-    def _on_slider_change(self):
+    def _on_slider_change(self, override_playing=False):
+        if self._playing is not None and not override_playing:
+            self._slider_job = None
+            return
+
         for prop in self.sliders.keys():
             if prop in self.reader.sizes and self.reader.sizes[prop] > 1:
                 value = int(round(self.sliders[prop]['slider'].get()))
@@ -126,6 +136,13 @@ class Viewer:
                 self.sliders[prop]['slider'].configure(from_=1, to=self.reader.sizes[prop])
                 self.sliders[prop]['slider'].update()
 
+                if prop == 't':
+                    try:
+                        self.sliders[prop]['fps'] = self.reader.frame_rate
+                    except AttributeError:
+                        self.sliders[prop]['fps'] = 1
+
+
     def hide_all_sliders(self):
         for prop in self.sliders.keys():
             self.sliders[prop]['frame'].grid_remove()
@@ -136,7 +153,8 @@ class Viewer:
                 'value_label': self.builder.get_object('ChannelValue'),
                 'play_btn': self.builder.get_object('ChannelPlayBtn'),
                 'slider': self.builder.get_object('ChannelScale'),
-                'current': 1
+                'current': 1,
+                'fps': 1
         }
 
         self.sliders['t'] = {
@@ -144,7 +162,8 @@ class Viewer:
                 'value_label': self.builder.get_object('TimeValue'),
                 'play_btn': self.builder.get_object('TimePlayBtn'),
                 'slider': self.builder.get_object('TimeScale'),
-                'current': 1
+                'current': 1,
+                'fps': 1
         }
 
         self.sliders['z'] = {
@@ -152,14 +171,20 @@ class Viewer:
                 'value_label': self.builder.get_object('ZValue'),
                 'play_btn': self.builder.get_object('ZPlayBtn'),
                 'slider': self.builder.get_object('ZScale'),
-                'current': 1
+                'current': 1,
+                'fps': 1
         }
 
         self.hide_all_sliders()
 
-    def update_statusbar(self):
-        if self.filename is not None:
-            text = 'Current file: "%s"' % self.filename
+    def update_statusbar(self, override=None):
+        if override is not None:
+            text = override
+        elif self.filename is not None:
+            filename = self.filename
+            if len(filename) > 35:
+                filename = '...' + filename[-35:]
+            text = 'Current file: "%s"' % filename
         else:
             text = 'Ready'
 
@@ -185,4 +210,38 @@ class Viewer:
 
     def resize(self, event=None):
         self.draw_figure()
+
+    def toggle_play_channel(self):
+        print('playing channel')
+
+    def toggle_play_time(self):
+        if self._playing is None:
+            self._playing = 't'
+            self.sliders['t']['play_btn'].configure(text='⏸')
+            self.sliders['t']['play_btn'].update()
+            timeout = int(round(1.0 / self.sliders['t']['fps'] * 1000.0))
+            self.update_statusbar("Playing axis 't' @ %.1f FPS" % (self.sliders['t']['fps']))
+            self.mainwindow.after(timeout, self.play_time, timeout)
+        elif self._playing is 't':
+            self.sliders['t']['play_btn'].configure(text='⏵')
+            self.sliders['t']['play_btn'].update()
+            self.update_statusbar()
+            self._playing = None
+
+    def toggle_play_z(self):
+        print('playing z')
+
+    def play_time(self, timeout):
+        if self._playing is None or self._playing != 't':
+            return
+
+        new_value = self.sliders['t']['current'] + 1
+        if new_value > self.reader.sizes['t']:
+            new_value = 1
+        self.sliders['t']['slider'].set(new_value)
+        self._on_slider_change(override_playing=True)
+
+        self.show_frame()
+
+        self.mainwindow.after(timeout, self.play_time, timeout)
 
