@@ -208,7 +208,8 @@
     <layout>
       <property name="column">0</property>
       <property name="propagate">True</property>
-      <property name="row">1</property>
+      <property name="row">2</property>
+      <property name="sticky">nsew</property>
       <rows>
         <row id="0">
           <property name="weight">1</property>
@@ -298,7 +299,8 @@
     <layout>
       <property name="column">0</property>
       <property name="propagate">True</property>
-      <property name="row">0</property>
+      <property name="row">1</property>
+      <property name="sticky">nsew</property>
       <rows>
         <row id="0">
           <property name="weight">1</property>
@@ -388,7 +390,7 @@
     <layout>
       <property name="column">0</property>
       <property name="propagate">True</property>
-      <property name="row">2</property>
+      <property name="row">3</property>
       <property name="sticky">nsew</property>
       <rows>
         <row id="0">

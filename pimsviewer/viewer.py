@@ -23,6 +23,7 @@ from pims.utils.sort import natural_keys
 from os import listdir, path
 from os.path import isfile, join
 from .utils import get_supported_extensions, memoize, drop_dot
+from .navigation_toolbar_pims import NavigationToolbarPims
 import io
 
 # Remove once PIMS is updated
@@ -54,7 +55,14 @@ class Viewer:
 
         self.statusbar = builder.get_object('StatusBar')
 
-        # 5: Program specific code
+        # Rest
+        self._slider_job = None
+        self.slider_frame = self.builder.get_object('SliderFrame')
+        self.sliders = {}
+        self.configure_sliders()
+        self._playing = None
+        self._play_job = None
+        self.export_dialog = self.builder.get_object('ExportDialog', self.mainwindow)
         self.filename = filename
         self.figure, self.ax = self.create_figure()
         self.image = None
@@ -63,14 +71,6 @@ class Viewer:
         self.photo = None
         self.reader = None
 
-        # 6: sliders
-        self._slider_job = None
-        self.slider_frame = self.builder.get_object('SliderFrame')
-        self.sliders = {}
-        self.configure_sliders()
-        self._playing = None
-        self._play_job = None
-        self.export_dialog = self.builder.get_object('ExportDialog', self.mainwindow)
 
         # 7: Connect callback functions
         builder.connect_callbacks(self)
@@ -252,7 +252,16 @@ class Viewer:
 
     def init_canvas(self):
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.canvas_frame)
-        self.canvas.get_tk_widget().grid(row=0, column=0, pady=0, padx=0, sticky='nsew')
+        self.canvas.get_tk_widget().grid(row=1, column=0, pady=0, padx=0, sticky='nsew')
+        toolbar = NavigationToolbarPims(self.canvas, self.canvas_frame, self.slider_frame)
+        toolbar.grid(row=0, column=0, pady=0, padx=0)
+        toolbar.update()
+
+        self.canvas_frame.rowconfigure(0, weight=1)
+        self.canvas_frame.rowconfigure(1, weight=100)
+
+        message = toolbar.get_message_label()
+        message.grid(row=0)
         return self.canvas
 
     def set_accelerators(self):
