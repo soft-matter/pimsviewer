@@ -48,15 +48,14 @@ You can use the viewer in a Python script as follows:
 ```
 from pimsviewer import Viewer
 viewer = Viewer()
-viewer.show()
+viewer.run()
 ```
 Optionally you may include a filename:
 
 ```
-import pims
 from pimsviewer import Viewer
 viewer = Viewer('path/to/file')
-viewer.show()
+viewer.run()
 ```
 
 ## Example: evaluating the effect of a processing function
@@ -78,7 +77,7 @@ AddNoise = ProcessPlugin(add_noise, 'Add noise', dock='right')
 AddNoise += Slider('noise_level', low=0, high=100, value=10,
                    orientation='vertical')
 viewer = Viewer(reader) + AddNoise
-viewer.show()
+viewer.run()
 ```
 
 ## Example: annotating features on a video
@@ -89,7 +88,7 @@ import trackpy as tp
 from pimsviewer import Viewer, AnnotatePlugin
 reader = pims.open('path/to/file')
 f = tp.batch(reader, diameter=15)
-(Viewer(reader) + AnnotatePlugin(f)).show()
+(Viewer(reader) + AnnotatePlugin(f)).run()
 ```
 
 ## Example: selecting features on a video
@@ -103,7 +102,7 @@ reader = pims.open('path/to/file')
 f = tp.batch(reader, diameter=15)
 f = tp.link_df(f, search_range=10)
 viewer = Viewer(reader) + SelectionPlugin(f)
-f_result = viewer.show()
+f_result = viewer.run()
 ```
 
 ## Example: designing a custom plotting function
@@ -128,6 +127,6 @@ Locate += Slider('radius', 2, 20, 7, value_type='int', orientation='vertical')
 Locate += Slider('separation', 1, 100, 7, value_type='float', orientation='vertical')
 Locate += Slider('minmass', 1, 10000, 100, value_type='int', orientation='vertical')
 viewer = Viewer(reader) + Locate
-viewer.show()
+viewer.run()
 ```
 

@@ -40,7 +40,7 @@ CURRENT_DIR = path.abspath(path.dirname(__file__))
 fps = 5
 
 class Viewer:
-    def __init__(self, filename):
+    def __init__(self, filename=None):
         # 1: Create a builder
         self.builder = builder = pygubu.Builder()
 
