@@ -39,3 +39,5 @@ class NavigationToolbarPims(NavigationToolbar2Tk):
 
     def get_message_label(self):
         return self._message_label
+
+    

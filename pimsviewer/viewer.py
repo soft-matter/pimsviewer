@@ -10,19 +10,23 @@ except ImportError: # Python 2
 import numpy as np
 import pygubu
 from tkinter.filedialog import askopenfilename
+from tkinter import filedialog, messagebox
 
 import matplotlib as mpl
 mpl.use("TkAgg")
+from matplotlib import rcParams
 import matplotlib.backends.tkagg as tkagg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import pims
+from pims import export, pipeline
 from pims.display import to_rgb
 from pims.utils.sort import natural_keys
 
 from os import listdir, path
 from os.path import isfile, join
-from .utils import get_supported_extensions, memoize, drop_dot
+from fractions import Fraction
+from .utils import get_supported_extensions, memoize, drop_dot, to_rgb_uint8
 from .navigation_toolbar_pims import NavigationToolbarPims
 import io
 
@@ -62,11 +66,11 @@ class Viewer:
         self.configure_sliders()
         self._playing = None
         self._play_job = None
-        self.export_dialog = self.builder.get_object('ExportDialog', self.mainwindow)
         self.filename = filename
         self.figure, self.ax = self.create_figure()
         self.image = None
         self.canvas_frame = builder.get_object('CanvasFrame')
+        self.toolbar = None
         self.canvas = self.init_canvas()
         self.photo = None
         self.reader = None
@@ -253,14 +257,14 @@ class Viewer:
     def init_canvas(self):
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.canvas_frame)
         self.canvas.get_tk_widget().grid(row=1, column=0, pady=0, padx=0, sticky='nsew')
-        toolbar = NavigationToolbarPims(self.canvas, self.canvas_frame, self.slider_frame)
-        toolbar.grid(row=0, column=0, pady=0, padx=0)
-        toolbar.update()
+        self.toolbar = NavigationToolbarPims(self.canvas, self.canvas_frame, self.slider_frame)
+        self.toolbar.grid(row=0, column=0, pady=0, padx=0)
+        self.toolbar.update()
 
         self.canvas_frame.rowconfigure(0, weight=1)
         self.canvas_frame.rowconfigure(1, weight=100)
 
-        message = toolbar.get_message_label()
+        message = self.toolbar.get_message_label()
         message.grid(row=0)
         return self.canvas
 
@@ -270,6 +274,8 @@ class Viewer:
         self.mainwindow.bind_all("<Control-O>", self.open_next_file)
         self.mainwindow.bind_all("<Alt-O>", self.open_previous_file)
         self.mainwindow.bind_all("<Control-w>", self.close_file)
+        self.mainwindow.bind_all("<Control-e>", self.export_file)
+        self.mainwindow.bind_all("<Control-s>", self.export_frame)
 
     def toggle_play_time(self):
         self.toggle_play('t')
@@ -361,17 +367,77 @@ class Viewer:
 
         return sorted(file_list, key=natural_keys)
 
-    def show_export_dialog(self):
-        self.export_dialog.show()
+    def export_file(self, event=None):
+        filetypes = {'avi': 'H264 movie', 'wmv': 'Windows Media Player movie', 'mp4': 'MPEG4 movie', 'mov': 'MOV movie'}
+        default_filetype = 'mp4'
 
-    def close_export_dialog(self):
-        self.export_dialog.close()
+        # Tk doesn't provide a way to choose a default filetype,
+        # so we just have to put it first
+        default_filetype_name = filetypes.pop(default_filetype)
+        sorted_filetypes = ([(default_filetype, default_filetype_name)]
+                            + sorted(filetypes.items()))
+        tk_filetypes = [(name, '*.%s' % ext) for ext, name in sorted_filetypes]
 
-    def export_file(self):
-        directory = self.builder.get_object('ExportFileChooser').cget('path')
-        filename = self.builder.get_object('ExportFilename').get()
-        self.close_export_dialog()
-        self.update_statusbar(override="Saving file to '%s'..." % filename)
-        # todo implement export
-        self.update_statusbar(override="File saved to '%s'" % filename)
+        # adding a default extension seems to break the
+        # asksaveasfilename dialog when you choose various save types
+        # from the dropdown.  Passing in the empty string seems to
+        # work - JDH!
+        #defaultextension = self.canvas.get_default_filetype()
+        defaultextension = ''
+        initialdir = path.expanduser(rcParams['savefig.directory'])
+        initialfile = path.splitext(path.basename(self.filename))[0] + '.%s' % default_filetype
+        fname = filedialog.asksaveasfilename(
+            master=self.mainwindow,
+            title='Save the file',
+            filetypes=tk_filetypes,
+            defaultextension=defaultextension,
+            initialdir=initialdir,
+            initialfile=initialfile,
+            )
 
+        if fname in ["", ()]:
+            return
+
+        # Save dir for next time, unless empty str (i.e., use cwd).
+        if initialdir != "":
+            rcParams['savefig.directory'] = (path.dirname(str(fname)))
+        try:
+            # This method will handle the delegation to the correct type
+            self._export_video(fname, rate=None)
+        except Exception as e:
+            messagebox.showerror("Error saving file", str(e))
+
+    def export_frame(self, event=None):
+        self.toolbar.save_figure()
+
+    def _export_video(self, filename=None, rate=None, **kwargs):
+            """For a list of kwargs, see pims.export"""
+            # TODO Save the canvas instead of the reader (including annotations)
+            presets = dict(avi=dict(codec='libx264', quality=23),
+                           mp4=dict(codec='mpeg4', quality=5),
+                           mov=dict(codec='mpeg4', quality=5),
+                           wmv=dict(codec='wmv2', quality=0.005))
+
+            ext = path.splitext(filename)[-1]
+            if ext[0] == '.':
+                ext = ext[1:]
+            try:
+                _kwargs = presets[ext]
+            except KeyError:
+                raise ValueError("Extension '.{}' is not a known format.".format(ext))
+
+            _kwargs.update(kwargs)
+
+            if rate is None:
+                try:
+                    rate = float(self.reader.frame_rate)
+                except AttributeError or ValueError:
+                    rate = 25.
+
+            self.reader.iter_axes = 't'
+            self.update_statusbar(override='Saving to "{}"'.format(filename))
+
+            # PIMS v0.4 export() has a bug having to do with float precision
+            # fix that here using limit_denominator() from fractions
+            export(pipeline(to_rgb_uint8)(self.reader), filename, Fraction(rate).limit_denominator(66535), **kwargs)
+            self.update_statusbar(override='Done saving to "{}"'.format(filename))
