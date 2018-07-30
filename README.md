@@ -42,7 +42,7 @@ Options:
 
 All examples below are also available as script files in the `examples` folder.
 
-## Example: Using the viewer from Python
+## Example 01 + 02: Using the viewer from Python
 You can use the viewer in a Python script as follows:
 
 ```
@@ -58,7 +58,7 @@ viewer = Viewer('path/to/file')
 viewer.run()
 ```
 
-## Example: evaluating the effect of a processing function
+## Example 03: evaluating the effect of a processing function
 This example adds a processing function that adds an adjustable amount of noise
 to an image. The amount of noise is tunable with a slider, which is displayed
 on the right of the image window.
