@@ -19,7 +19,8 @@ import matplotlib.backends.tkagg as tkagg
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import pims
-from pims import export, pipeline
+from slicerator import pipeline
+from pims import export
 from pims.display import to_rgb
 from pims.utils.sort import natural_keys
 
@@ -60,6 +61,8 @@ class Viewer:
         self.statusbar = builder.get_object('StatusBar')
 
         # Rest
+        self.reader = None
+        self.process_funcs = {}
         self._slider_job = None
         self.slider_frame = self.builder.get_object('SliderFrame')
         self.sliders = {}
@@ -69,12 +72,11 @@ class Viewer:
         self.filename = filename
         self.figure, self.ax = self.create_figure()
         self.image = None
+        self.index = {}
         self.canvas_frame = builder.get_object('CanvasFrame')
         self.toolbar = None
         self.canvas = self.init_canvas()
         self.photo = None
-        self.reader = None
-
 
         # 7: Connect callback functions
         builder.connect_callbacks(self)
@@ -115,40 +117,75 @@ class Viewer:
         self.ax.axis('off')
         self.canvas.draw_idle()
 
-    def merge_channels(self, frame_no=0, z_no=0):
-        if 'z' in self.reader.sizes:
-            self.reader.bundle_axes = 'czyx'
-            frame = self.reader[frame_no][:, z_no, :, :, :]
-            return to_rgb(frame)
-        else:
-            self.reader.bundle_axes = 'cyx'
-            frame = self.reader[frame_no][:, :, :]
-            return to_rgb(frame)
+    def merge_channels(self, image):
+        return to_rgb(image)
+
+    def change_merge_channels(self, event=None):
+        self.show_frame()
 
     def show_frame(self):
         frame_no = self.sliders['t']['current'] - 1
         channel_no = self.sliders['c']['current'] - 1
         z_no = self.sliders['z']['current'] - 1
 
+
         if not hasattr(self.reader, 'sizes'):
             self.reader.sizes = {}
         if 'c' in self.reader.sizes:
-            merge = 'selected' in self.sliders['c']['merge_btn'].state()
-            if merge:
-                self._imshow(self.merge_channels(frame_no, z_no))
+            if 'z' in self.reader.sizes:
+                self.index = {'t': frame_no, 'c': channel_no, 'z': z_no}
+                self._imshow(self.get_processed_image(frame=frame_no, z=z_no, c=channel_no))
             else:
-                if 'z' in self.reader.sizes:
-                    self.reader.bundle_axes = 'czyx'
-                    self._imshow(self.reader[frame_no][channel_no, z_no, :, :])
-                else:
-                    self.reader.bundle_axes = 'cyx'
-                    self._imshow(self.reader[frame_no][channel_no, :, :])
+                self.index = {'t': frame_no, 'c': channel_no}
+                self._imshow(self.get_processed_image(frame=frame_no, c=channel_no))
         else:
             if 'z' in self.reader.sizes:
-                self.reader.bundle_axes = 'zyx'
-                self._imshow(self.reader[frame_no][z_no, :, :])
+                self.index = {'t': frame_no, 'z': z_no}
+                self._imshow(self.get_processed_image(frame=frame_no, z=z_no))
             else:
-                self._imshow(self.reader[frame_no])
+                self.index = {'t': frame_no}
+                self._imshow(self.get_processed_image(frame=frame_no))
+
+    def get_processed_image(self, frame=0, z=None, c=None):
+        self.reader.iter_axes = 't'
+        merge = False
+        if c is not None:
+            merge = 'selected' in self.sliders['c']['merge_btn'].state()
+            if z is not None:
+                self.reader.bundle_axes = 'czyx'
+                if merge:
+                    image = self.reader[frame][:, z, :, :]
+                else:
+                    image = self.reader[frame][c, z, :, :]
+            else:
+                self.reader.bundle_axes = 'cyx'
+                if merge:
+                    image = self.reader[frame][:, :, :]
+                else:
+                    image = self.reader[frame][c, :, :]
+        elif z is not None:
+            self.reader.bundle_axes = 'zyx'
+            image = self.reader[frame][z, :, :]
+        else:
+            self.reader.bundle_axes = 'yx'
+            image = self.reader[frame][:, :]
+
+        for fname in self.process_funcs:
+            image = self.process_funcs[fname](image)
+
+        if merge:
+            image = self.merge_channels(image)
+
+        return image
+
+    def add_process_function(self, name, function):
+        self.process_funcs[name] = function
+
+    def remove_process_function(self, name):
+        try:
+            del self.process_funcs[name]
+        except KeyError:
+            return
 
     def _imshow(self, image):
         if self.image is None:
@@ -321,9 +358,6 @@ class Viewer:
 
         self._play_job = self.mainwindow.after(timeout, self.play, timeout, prop)
 
-    def change_merge_channels(self):
-        self.mainwindow.after(0, self.show_frame)
-
     def open_next_file(self, event=None, forward=True):
         if self.filename is None:
             self.open_file()
@@ -439,5 +473,5 @@ class Viewer:
 
             # PIMS v0.4 export() has a bug having to do with float precision
             # fix that here using limit_denominator() from fractions
-            export(pipeline(to_rgb_uint8)(self.reader), filename, Fraction(rate).limit_denominator(66535), **kwargs)
+            export(pipeline(to_rgb_uint8)(self.processed_reader), filename, Fraction(rate).limit_denominator(66535), **kwargs)
             self.update_statusbar(override='Done saving to "{}"'.format(filename))
