@@ -331,7 +331,10 @@ class Viewer:
             self.sliders[prop]['play_btn'].update()
             if prop == 't':
                 self.sliders[prop]['fps'] = np.round(self.builder.tkvariables.__getitem__('fps').get(), 1)
-            timeout = int(round(1.0 / self.sliders[prop]['fps'] * 1000.0))
+            play_fps = self.sliders[prop]['fps']
+            if play_fps <= 0:
+                play_fps = fps
+            timeout = int(round(1.0 / play_fps * 1000.0))
             self.update_statusbar("Playing axis '%s' @ %.1f FPS" % (prop, self.sliders[prop]['fps']))
             if self._play_job:
                 self.mainwindow.after_cancel(self._play_job)
