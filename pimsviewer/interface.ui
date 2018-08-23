@@ -378,6 +378,31 @@
         </layout>
       </object>
     </child>
+    <child>
+      <object class="ttk.Entry" id="fps_entry">
+        <property name="state">normal</property>
+        <property name="textvariable">double:fps</property>
+        <property name="width">4</property>
+        <layout>
+          <property name="column">4</property>
+          <property name="propagate">True</property>
+          <property name="row">0</property>
+          <property name="sticky">nsew</property>
+        </layout>
+      </object>
+    </child>
+    <child>
+      <object class="ttk.Label" id="Label_1">
+        <property name="takefocus">false</property>
+        <property name="text" translatable="yes">FPS</property>
+        <layout>
+          <property name="column">5</property>
+          <property name="propagate">True</property>
+          <property name="row">0</property>
+          <property name="sticky">nsew</property>
+        </layout>
+      </object>
+    </child>
   </object>
   <object class="ttk.Frame" id="ZFrame">
     <property name="height">200</property>

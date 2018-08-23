@@ -236,9 +236,10 @@ class Viewer:
 
                 if prop == 't':
                     try:
-                        self.sliders[prop]['fps'] = self.reader.frame_rate
+                        self.sliders[prop]['fps'] = np.round(self.reader.frame_rate, 1)
                     except AttributeError:
-                        self.sliders[prop]['fps'] = fps
+                        self.sliders[prop]['fps'] = np.round(fps, 1)
+                    self.builder.tkvariables.__getitem__('fps').set(self.sliders[prop]['fps'])
 
 
     def hide_all_sliders(self):
@@ -328,6 +329,8 @@ class Viewer:
             self._playing = prop
             self.sliders[prop]['play_btn'].configure(text='⏸')
             self.sliders[prop]['play_btn'].update()
+            if prop == 't':
+                self.sliders[prop]['fps'] = np.round(self.builder.tkvariables.__getitem__('fps').get(), 1)
             timeout = int(round(1.0 / self.sliders[prop]['fps'] * 1000.0))
             self.update_statusbar("Playing axis '%s' @ %.1f FPS" % (prop, self.sliders[prop]['fps']))
             if self._play_job:
