@@ -2,10 +2,17 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import numpy as np
-from .widgets import Text
 from .utils import df_add_row, AnchoredScaleBar
-from .qt import QtWidgets, QtCore, init_qtapp, Qt
 from collections import deque
+
+try:
+    import tkinter as tk
+    import tkinter.ttk as ttk
+    import tkinter.font as font
+except ImportError: # Python 2
+    import Tkinter as tk
+    import ttk
+    import tkFont as font
 
 
 def remove_artists(artists):
@@ -27,203 +34,90 @@ def get_frame_no(indices, frame_axes):
     return frame_no
 
 
-class Plugin(QtWidgets.QDialog):
-    def __init__(self, height=0, width=400, dock='bottom'):
-        init_qtapp()
-        super(Plugin, self).__init__()
+class Plugin(tk.Toplevel):
+    def __init__(self, viewer, func=None, name=None, **kwargs):
+        self.func = func
 
-        self.dock = dock
+        if name is None:
+            if self.func is not None:
+                self.name = func.__name__
+            else:
+                self.name = ''
+        else:
+            self.name = name
 
-        self.viewer = None
-
-        self.setWindowTitle(self.name)
-        self.layout = QtWidgets.QGridLayout(self)
-        self.resize(width, height)
-        self.row = 0
-
-        self.arguments = []
-        self.keyword_arguments = {}
-
-    def attach(self, viewer):
-        """Attach the Plugin to a Viewer."""
-        self.setParent(viewer)
-        self.setWindowFlags(QtCore.Qt.Dialog)
+        self.parent = viewer.mainwindow
         self.viewer = viewer
-        self.viewer.plugins.append(self)
+        super().__init__(self.parent, **kwargs)
 
-    def add_widget(self, widget):
+        if 'width' in kwargs or 'height' in kwargs:
+            width = kwargs['width'] if 'width' in kwargs else 100
+            height = kwargs['height'] if 'height' in kwargs else 100
+            self.wm_geometry("%dx%d" % (width, height))
+
+        self.attributes('-topmost', 'true')
+
+        self.widgets = []
+        self.update()
+
+    def close(self):
+        """Close the plugin and clean up."""
+        self.viewer.show_frame()
+
+        super(Plugin, self).close()
+
+    def add_widget(self, widget, add_command=True):
         """Add widget to pipeline.
-
-        Alternatively, you can use simple addition to add widgets:
-
-            plugin += Slider('param_name', low=0, high=100)
 
         Widgets can adjust arguments of the pipeline function, as specified by
         the Widget's `ptype`.
         """
-        try:
-            ptype = widget.ptype
-        except AttributeError:
-            ptype = 'arg'
-
-        if ptype == 'kwarg':
-            name = widget.name.replace(' ', '_')
-            self.keyword_arguments[name] = widget
-            widget.callback = self.process
-        elif ptype == 'arg':
-            self.arguments.append(widget)
-            widget.callback = self.process
-
         widget.plugin = self
-        self.layout.addWidget(widget, self.row, 0)
-        self.row += 1
+        widget.grid()
+        if add_command:
+            widget.config(command=self.process)
+        widget.update()
+        self.widgets.append(widget)
 
     def __add__(self, widget):
         self.add_widget(widget)
         return self
 
-    def process(self, *widget_arg):
-        pass
-
-    def process_image(self, image):
-        return image
-
-    def _get_value(self, param):
-        # If param is a widget, return its `val` attribute.
-        return param if not hasattr(param, 'val') else param.val
-
-    def show(self, main_window=True):
-        """Show plugin."""
-        super(Plugin, self).show()
-        self.activateWindow()
-        self.raise_()
-
-
-class ProcessPlugin(Plugin):
-    """Base class for viewing the result of image processing inside the Viewer.
-
-    The ProcessPlugin class connects an image filter (or another function) to
-    the Viewer. The Viewer returns a reader object that has the function applied
-    with parameters set inside the Viewer.
-
-    Parameters
-    ----------
-    fuunc : function
-        Function that processes the image. It should not change the image shape.
-    name : string
-        Name of pipeline. This is displayed as the window title.
-    height, width : int
-        Size of plugin window in pixels. Note that Qt will automatically resize
-        a window to fit components. So if you're adding rows of components, you
-        can leave `height = 0` and just let Qt determine the final height.
-    dock : {bottom, top, left, right}
-        Default docking area
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from pimsviewer import Viewer, ProcessPlugin, Slider
-    >>>
-    >>> def add_noise(img, noise_level):
-    >>>     return img + np.random.random(img.shape) * noise_level
-    >>>
-    >>> image_reader = np.zeros((1, 512, 512), dtype=np.uint8)
-    >>>
-    >>> AddNoise = ProcessPlugin(add_noise) + Slider('noise_level', 0, 100, 0)
-    >>> viewer = Viewer(image_reader)
-    >>> viewer += AddNoise
-    >>> original, noise_added = viewer.show()
-    """
-
-    def __init__(self, func, name=None, height=0, width=400,
-                 dock='bottom'):
-        self.func = func
-
-        if name is None:
-            self.name = func.__name__
-        else:
-            self.name = name
-
-        super(ProcessPlugin, self).__init__(height, width, dock)
-
-    def attach(self, viewer):
-        """Attach the pipeline to an ImageViewer.
-
-        Note that the ImageViewer will automatically call this method when the
-        plugin is added to the ImageViewer. For example:
-
-            viewer += Plugin(pipeline_func)
-
-        Also note that `attach` automatically calls the filter function so that
-        the image matches the filtered value specified by attached widgets.
-        """
-        super(ProcessPlugin, self).attach(viewer)
-        self.process()
-
-    def process(self, *widget_arg):
+    def process(self, event=None):
         """Notify the viewer that the processing function has been changed. """
-        self.viewer.update_processed_image(self)
+        self.viewer.add_process_function('process_plugin_%s' % self.name, self.process_image)
+        self.viewer.show_frame()
 
     def process_image(self, image):
-        kwargs = dict([(name, self._get_value(a))
-                       for name, a in self.keyword_arguments.items()])
-        return self.func(image, *self.arguments, **kwargs)
-
-    def close(self):
-        """Close the plugin and clean up."""
-        if self in self.viewer.plugins:
-            self.viewer.plugins.remove(self)
-
-        self.viewer.update_processed_image()
-
-        super(ProcessPlugin, self).close()
-
-    def output(self):
-        return dict([(name, self._get_value(a))
-                     for name, a in self.keyword_arguments.items()])
-
+        if self.func is not None:
+            values = {}
+            for w in self.widgets:
+                name = str(w).split('.')[-1]
+                values[name] = w.get()
+            return self.func(image, values)
+        else:
+            return image
 
 class PlottingPlugin(Plugin):
-    def __init__(self, plot_func, name=None, height=0, width=400,
-                 dock='bottom'):
-        if name is None:
-            self.name = plot_func.__name__
-        else:
-            self.name = name
+    def __init__(self, viewer, plot_func, name=None, height=100, width=400):
+        super().__init__(viewer, func=plot_func, name=name, height=height, width=width)
 
-        super(PlottingPlugin, self).__init__(height, width, dock)
-
-        self.artist = None
-        self.plot_func = plot_func
-
-    def attach(self, viewer):
-        super(PlottingPlugin, self).attach(viewer)
-
-        self.fig = viewer.fig
-        self.ax = viewer.ax
-        self.canvas = viewer.canvas
-
-        self.viewer.original_image_changed.connect(self.process)
-
-        self.process()
-
-    def process(self, *widget_arg):
-        kwargs = dict([(name, self._get_value(a))
-                       for name, a in self.keyword_arguments.items()])
-        if self.artist is not None:
-            remove_artists(self.artist)
-        self.artist = self.plot_func(self.viewer.image, *self.arguments,
-                                     ax=self.ax, **kwargs)
-        self.canvas.draw_idle()
+    def process_image(self, image):
+        values = {}
+        for w in self.widgets:
+            name = str(w).split('.')[-1]
+            values[name] = w.get()
+        return self.func(image, values, self.viewer.ax)
 
 
 class AnnotatePlugin(Plugin):
     name = 'Annotate Features'
     default_msg = 'Click a particle to display its properties.\n'
 
-    def __init__(self, features, frame_axes='t', plot_style=None,
+    def __init__(self, viewer, features, frame_axes='t', plot_style=None,
                  text_style=None, picking_tolerance=5, z_width=0.5):
-        super(AnnotatePlugin, self).__init__(dock=False)
+        super().__init__(viewer)
+        self.viewer = viewer
         self.artist = None
         if features.index.is_unique:
             self.features = features.copy()
@@ -246,26 +140,23 @@ class AnnotatePlugin(Plugin):
 
         self.picking_tolerance = picking_tolerance
 
-    def attach(self, viewer):
-        super(AnnotatePlugin, self).attach(viewer)
-
-        self.fig = viewer.fig
-        self.ax = viewer.ax
-        self.canvas = viewer.canvas
-
-        self.viewer.original_image_changed.connect(self.process)
+        self.canvas = self.viewer.canvas
+        self.ax = self.viewer.ax
 
         if self.canvas is not None:
             self.canvas.mpl_connect('pick_event', self.on_pick)
 
-        self._out = Text()
-        self.add_widget(self._out)
+        self._out = tk.StringVar()
+        self._out_w = tk.Label(self, textvariable=self._out)
+        self.add_widget(self._out_w, add_command=False)
+        self._out.set(self.default_msg)
+
         self.process()
 
-    def process(self, *widget_arg):
+    def process_image(self, image):
         frame_no = get_frame_no(self.viewer.index, self._frame_axes)
         text_offset = 2
-        if 'z' in self.viewer.sizes:
+        if 'z' in self.viewer.index:
             z = self.viewer.index['z'] + 0.5
             f_frame = self.features[(self.features['frame'] == frame_no) &
                                     (np.abs(self.features['z'] - z) <= self.z_width)]
@@ -294,7 +185,7 @@ class AnnotatePlugin(Plugin):
                         texts.append(self.ax.text(x + text_offset, y - text_offset,
                                                   p, **self.text_style))
             self.artist = [self.artist, texts]
-        self.canvas.draw_idle()
+        return image
 
     @property
     def selected(self):
@@ -308,7 +199,7 @@ class AnnotatePlugin(Plugin):
         else:
             msg = 'index     {}\n'.format(int(value)) + \
                   self.features.loc[value].to_string()
-        self._out.text = msg
+        self._out.set(msg)
 
     def on_pick(self, event):
         if event.mouseevent is self._no_pick:
@@ -334,8 +225,8 @@ class SelectionPlugin(AnnotatePlugin):
                   'Select and double click with right mouse to hide the full trajectory\n' \
                   'Double click with right mouse to add\n'
 
-    def __init__(self, *args, **kwargs):
-        super(SelectionPlugin, self).__init__(*args, **kwargs)
+    def __init__(self, viewer, *args, **kwargs):
+        super().__init__(viewer, *args, **kwargs)
         if 'hide' not in self.features:
             self.features['hide'] = False
         self.dragging = False
@@ -348,10 +239,13 @@ class SelectionPlugin(AnnotatePlugin):
         if 'color' in self.text_style:
             del self.text_style['color']
 
-    def process(self, *widget_arg):
+        self.canvas.mpl_connect('button_press_event', self.on_press)
+        self.canvas.mpl_connect('button_release_event', self.on_release)
+
+    def process_image(self, image):
         frame_no = get_frame_no(self.viewer.index, self._frame_axes)
         text_offset = 2
-        if 'z' in self.viewer.sizes:
+        if 'z' in self.viewer.index:
             z = self.viewer.index['z'] + 0.5
             f_frame = self.features[(self.features['frame'] == frame_no) &
                                     (np.abs(self.features['z'] - z) <= self.z_width)]
@@ -371,12 +265,17 @@ class SelectionPlugin(AnnotatePlugin):
         else:
             colors = []
             for i in f_frame.index:
-                if self.selected == i:
-                    colors.append('yellow')
-                elif f_frame.loc[i, 'hide']:
-                    colors.append('grey')
-                else:
+                try:
+                    if self.selected == i:
+                        colors.append('yellow')
+                    elif f_frame.loc[i, 'hide']:
+                        colors.append('grey')
+                    else:
+                        colors.append('red')
+                except KeyError:
                     colors.append('red')
+            if 'edgecolors' in self.plot_style:
+                del self.plot_style['edgecolors']
             self.artist = self.ax.scatter(f_frame['x'] + 0.5,
                                           f_frame['y'] + 0.5,
                                           edgecolors=colors,
@@ -391,17 +290,13 @@ class SelectionPlugin(AnnotatePlugin):
                     except ValueError:
                         pass
                     else:
+                        if 'color' in self.text_style:
+                            del self.text_style['color']
                         texts.append(self.ax.text(x + text_offset, y - text_offset,
                                                   p, color=color,
                                                   **self.text_style))
             self.artist = [self.artist, texts]
-        self.canvas.draw_idle()
-
-    def attach(self, viewer):
-        super(SelectionPlugin, self).attach(viewer)
-
-        self.canvas.mpl_connect('button_press_event', self.on_press)
-        self.canvas.mpl_connect('button_release_event', self.on_release)
+        return image
 
     def output(self):
         return self.features
@@ -470,7 +365,7 @@ class SelectionPlugin(AnnotatePlugin):
             f = self.features.copy()
             new_index = df_add_row(f)
             f.loc[new_index, ['x', 'y']] = event.xdata, event.ydata
-            if 'z' in self.viewer.sizes:
+            if 'z' in self.viewer.index:
                 f.loc[new_index, 'z'] = self.viewer.index['z'] + 0.5
             f.loc[new_index, 'frame'] = \
                 get_frame_no(self.viewer.index, self._frame_axes)
@@ -490,131 +385,3 @@ class SelectionPlugin(AnnotatePlugin):
                 f.loc[self.selected, 'particle'] = -1
             self.set_features(f)
 
-
-class ScaleBarPlugin(Plugin):
-    fig = None
-    ax = None
-    canvas = None
-    artist = None
-    name = 'Scale bar'
-    real_length = 2
-    real_unit = 'μm'
-    pixel_per_micron = None
-    padding_px = 10
-    enabled = True
-    showing = False
-    dock = False
-    menu_item = None
-    color = 'white'
-
-    def __init__(self):
-        super().__init__(dock=self.dock)
-
-        self.real_length_layout = QtWidgets.QHBoxLayout()
-        self.real_length_label = QtWidgets.QLabel('Physical length')
-        self.input_real_length = QtWidgets.QLineEdit(str(self.real_length), self)
-        self.real_length_layout.addWidget(self.real_length_label)
-        self.real_length_layout.addWidget(self.input_real_length)
-        self.layout.addLayout(self.real_length_layout, 0, 0)
-
-        self.real_unit_layout = QtWidgets.QHBoxLayout()
-        self.real_unit_label = QtWidgets.QLabel('Physical unit')
-        self.input_real_unit = QtWidgets.QLineEdit(self.real_unit, self)
-        self.real_unit_layout.addWidget(self.real_unit_label)
-        self.real_unit_layout.addWidget(self.input_real_unit)
-        self.layout.addLayout(self.real_unit_layout, 1, 0)
-
-        self.pixel_micron_layout = QtWidgets.QHBoxLayout()
-        self.pixel_micron_label = QtWidgets.QLabel('Pixels / physical length')
-        self.input_pixel_micron = QtWidgets.QLineEdit(self)
-        self.pixel_micron_layout.addWidget(self.pixel_micron_label)
-        self.pixel_micron_layout.addWidget(self.input_pixel_micron)
-        self.layout.addLayout(self.pixel_micron_layout, 2, 0)
-
-        self.color_layout = QtWidgets.QHBoxLayout()
-        self.color_label = QtWidgets.QLabel('Color')
-        self.input_color = QtWidgets.QComboBox(self)
-        self.input_color.addItem('White', 'white')
-        self.input_color.addItem('Black', 'black')
-        self.color_layout.addWidget(self.color_label)
-        self.color_layout.addWidget(self.input_color)
-        self.layout.addLayout(self.color_layout, 3, 0)
-
-        self.row = 4
-
-        self.show_scalebar_checkbox = QtWidgets.QCheckBox('Show scalebar', self)
-        self.add_widget(self.show_scalebar_checkbox)
-
-        self.ok_btn = QtWidgets.QPushButton('OK', self)
-        self.ok_btn.clicked.connect(self.close)
-        self.add_widget(self.ok_btn)
-
-    def attach(self, viewer):
-        super().attach(viewer)
-
-        self.viewer.original_image_changed.connect(self.process)
-
-        self.process()
-
-    def process(self, *widget_arg):
-        kwargs = dict([(name, self._get_value(a))
-                       for name, a in self.keyword_arguments.items()])
-
-        if self.artist is not None:
-            remove_artists(self.artist)
-
-        self.fig = self.viewer.fig
-        self.ax = self.viewer.ax
-        self.canvas = self.viewer.canvas
-        self.artist = self.plot_func(**kwargs)
-
-        if self.viewer.calibration is not None:
-            self.pixel_per_micron = self.viewer.calibration
-            self.input_pixel_micron.setText('%f' % self.pixel_per_micron)
-
-        if self.menu_item is None:
-            self.menu_item = QtWidgets.QAction('&Scale bar', self.viewer.view_menu)
-            self.menu_item.triggered.connect(self.show_dialog)
-            self.viewer.view_menu.addAction(self.menu_item)
-
-        if self.canvas is not None:
-            self.canvas.draw_idle()
-
-    def plot_func(self, *kwarg):
-        if self.enabled and self.ax is not None and self.pixel_per_micron is not None:
-            label_text = '%.1f %s' % (self.real_length, self.real_unit)
-            bar_length = self.real_length * self.pixel_per_micron
-            sb = AnchoredScaleBar(self.ax.transData, sizex=bar_length,
-                                  labelx=label_text, barcolor=self.color,
-                                  fontproperties={
-                                      'color': self.color,
-                                      'size': 6
-                                  })
-            self.ax.add_artist(sb)
-            return sb
-
-        return None
-
-    def show_dialog(self):
-        self.showing = True
-        self.show()
-
-    def show(self, main_window=True):
-        if self.showing:
-            super().show(main_window=main_window)
-
-    def closeEvent(self, event):
-        self.showing = False
-        try:
-            self.real_length = float(self.input_real_length.text())
-        except ValueError:
-            pass
-        try:
-            self.pixel_per_micron = float(self.input_pixel_micron.text())
-        except ValueError:
-            pass
-        self.real_unit = self.input_real_unit.text()
-        self.enabled = self.show_scalebar_checkbox.isChecked()
-        self.color = self.input_color.currentData()
-
-        self.process()
