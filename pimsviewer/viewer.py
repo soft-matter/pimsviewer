@@ -29,6 +29,7 @@ from os.path import isfile, join
 from fractions import Fraction
 from .utils import get_supported_extensions, memoize, drop_dot, to_rgb_uint8
 from .navigation_toolbar_pims import NavigationToolbarPims
+from .plugins import ColorPlugin
 import io
 
 # Remove once PIMS is updated
@@ -59,6 +60,9 @@ class Viewer:
         self.mainwindow.config(menu=menu)
 
         self.pluginmenu = builder.get_object('PluginsMenu', self.mainmenu)
+        #@TODO: make a more general method to initialize plugins
+        ColorPlugin.add_menu_item(self, self.pluginmenu)
+
 
         self.statusbar = builder.get_object('StatusBar')
 
