@@ -479,5 +479,5 @@ class Viewer:
 
             # PIMS v0.4 export() has a bug having to do with float precision
             # fix that here using limit_denominator() from fractions
-            export(pipeline(to_rgb_uint8)(self.processed_reader), filename, Fraction(rate).limit_denominator(66535), **kwargs)
+            export(pipeline(to_rgb_uint8)(self.reader), filename, Fraction(rate).limit_denominator(66535), **kwargs)
             self.update_statusbar(override='Done saving to "{}"'.format(filename))
