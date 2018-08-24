@@ -58,6 +58,8 @@ class Viewer:
         self.mainmenu = menu = builder.get_object('Menu_1', self.mainwindow)
         self.mainwindow.config(menu=menu)
 
+        self.pluginmenu = builder.get_object('PluginsMenu', self.mainmenu)
+
         self.statusbar = builder.get_object('StatusBar')
 
         # Rest
@@ -118,6 +120,9 @@ class Viewer:
         self.canvas.draw_idle()
 
     def merge_channels(self, image):
+        if len(image.shape) == 3 and image.shape[2] == 3:
+            return image
+
         return to_rgb(image)
 
     def change_merge_channels(self, event=None):
@@ -149,28 +154,36 @@ class Viewer:
     def get_processed_image(self, frame=0, z=None, c=None):
         self.reader.iter_axes = 't'
         merge = False
+        coords = {'t': frame}
+
         if c is not None:
             merge = 'selected' in self.sliders['c']['merge_btn'].state()
             if z is not None:
                 self.reader.bundle_axes = 'czyx'
                 if merge:
                     image = self.reader[frame][:, z, :, :]
+                    coords['z'] = z
                 else:
                     image = self.reader[frame][c, z, :, :]
+                    coords['z'] = z
+                    coords['c'] = c
             else:
                 self.reader.bundle_axes = 'cyx'
                 if merge:
                     image = self.reader[frame][:, :, :]
                 else:
                     image = self.reader[frame][c, :, :]
+                    coords['c'] = c
         elif z is not None:
             self.reader.bundle_axes = 'zyx'
             image = self.reader[frame][z, :, :]
+            coords['z'] = z
         else:
             self.reader.bundle_axes = 'yx'
             image = self.reader[frame][:, :]
 
         for fname in self.process_funcs:
+            image.metadata['coords'] = coords
             image = self.process_funcs[fname](image)
 
         if merge:
