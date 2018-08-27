@@ -195,6 +195,12 @@
         </child>
       </object>
     </child>
+    <child>
+      <object class="tk.Menuitem.Submenu" id="PluginsMenu">
+        <property name="label" translatable="yes">Plugins</property>
+        <property name="underline">0</property>
+      </object>
+    </child>
   </object>
   <object class="ttk.Frame" id="ChannelFrame">
     <property name="height">200</property>

@@ -14,6 +14,8 @@ except ImportError: # Python 2
     import ttk
     import tkFont as font
 
+from tkinter.colorchooser import askcolor
+from pims.display import to_rgb
 
 def remove_artists(artists):
     """Call artist.remove() on a nested list of artists."""
@@ -35,10 +37,13 @@ def get_frame_no(indices, frame_axes):
 
 
 class Plugin(tk.Toplevel):
+    name = None
+    init_menu = False
+
     def __init__(self, viewer, func=None, name=None, **kwargs):
         self.func = func
 
-        if name is None:
+        if name is None and self.name is None:
             if self.func is not None:
                 self.name = func.__name__
             else:
@@ -60,11 +65,22 @@ class Plugin(tk.Toplevel):
         self.widgets = []
         self.update()
 
+    @classmethod
+    def add_menu_item(cls, viewer, menu):
+        if cls.name is None or not cls.init_menu:
+            return
+
+        menu.add_command(label=cls.name, command=lambda: cls.menu_item_callback(viewer))
+
+    @classmethod
+    def menu_item_callback(cls, viewer):
+        instance = cls(viewer)
+
     def close(self):
         """Close the plugin and clean up."""
         self.viewer.show_frame()
 
-        super(Plugin, self).close()
+        self.destroy()
 
     def add_widget(self, widget, add_command=True):
         """Add widget to pipeline.
@@ -97,6 +113,82 @@ class Plugin(tk.Toplevel):
             return self.func(image, values)
         else:
             return image
+
+class ColorPlugin(Plugin):
+    init_menu = True
+    name = 'Adjust colors'
+
+    colors = {0: [1, 0, 1], 1: [0, 1, 0]}
+    buttons = {}
+    num_channels = 0
+
+    def __init__(self, viewer):
+        super().__init__(viewer, name=self.name)
+
+        try:
+            self.num_channels = self.viewer.reader.sizes['c']
+        except KeyError:
+            self.num_channels = 1
+
+        # add widgets
+        for c in range(self.num_channels):
+            l = tk.Label(self, text='Channel %d' % c)
+            l.grid(row=c, column=1)
+            self.add_widget(l, add_command=False)
+
+            self.buttons[c] = tk.Button(self)
+            if c in self.colors:
+                color = np.floor(np.multiply(self.colors[c], 255.0)).astype(int)
+                self.buttons[c].config(bg='#%02x%02x%02x' % tuple(color))
+
+            self.buttons[c].config(command=lambda i=c: self.select_color(i))
+            self.buttons[c].grid(row=c, column=2)
+            self.add_widget(self.buttons[c], add_command=False)
+
+        btn = tk.Button(self, text='Close', command=self.close)
+        self.add_widget(btn, add_command=False)
+
+        self.process()
+
+    def select_color(self, c):
+        if c in self.colors:
+            previous_color = tuple(np.floor(np.multiply(self.colors[c], 255.0)).astype(int))
+        else:
+            previous_color = None
+
+        selected = askcolor(previous_color)[0]
+        
+        if selected is not None:
+            selected = np.divide(selected, 255.0)
+            # something goes wrong with the tk color selector
+            selected[selected < 0] = 0
+            selected[selected > 1] = 1.0
+            self.colors[c] = selected
+
+        color = np.floor(np.multiply(self.colors[c], 255.0)).astype(int)
+        self.buttons[c].config(bg='#%02x%02x%02x' % tuple(color))
+
+        self.process()
+
+    def process_image(self, image):
+        if len(image.shape) == 2:
+            if 'c' in image.metadata['coords']:
+                c = image.metadata['coords']['c']
+            else:
+                c = 0
+
+            try:
+                color = self.colors[c]
+            except KeyError:
+                color = np.ones(3)
+
+            rgb_img = to_rgb(image, colors=color, normed=True)
+        else:
+            colors = list(self.colors.values())
+            rgb_img = to_rgb(image, colors=colors, normed=True)
+
+        return rgb_img
+
 
 class PlottingPlugin(Plugin):
     def __init__(self, viewer, plot_func, name=None, height=100, width=400):

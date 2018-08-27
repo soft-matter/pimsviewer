@@ -29,6 +29,7 @@ from os.path import isfile, join
 from fractions import Fraction
 from .utils import get_supported_extensions, memoize, drop_dot, to_rgb_uint8
 from .navigation_toolbar_pims import NavigationToolbarPims
+from .plugins import ColorPlugin
 import io
 
 # Remove once PIMS is updated
@@ -57,6 +58,11 @@ class Viewer:
         # 4: Set main menu
         self.mainmenu = menu = builder.get_object('Menu_1', self.mainwindow)
         self.mainwindow.config(menu=menu)
+
+        self.pluginmenu = builder.get_object('PluginsMenu', self.mainmenu)
+        #@TODO: make a more general method to initialize plugins
+        ColorPlugin.add_menu_item(self, self.pluginmenu)
+
 
         self.statusbar = builder.get_object('StatusBar')
 
@@ -118,6 +124,9 @@ class Viewer:
         self.canvas.draw_idle()
 
     def merge_channels(self, image):
+        if len(image.shape) == 3 and image.shape[2] == 3:
+            return image
+
         return to_rgb(image)
 
     def change_merge_channels(self, event=None):
@@ -149,28 +158,36 @@ class Viewer:
     def get_processed_image(self, frame=0, z=None, c=None):
         self.reader.iter_axes = 't'
         merge = False
+        coords = {'t': frame}
+
         if c is not None:
             merge = 'selected' in self.sliders['c']['merge_btn'].state()
             if z is not None:
                 self.reader.bundle_axes = 'czyx'
                 if merge:
                     image = self.reader[frame][:, z, :, :]
+                    coords['z'] = z
                 else:
                     image = self.reader[frame][c, z, :, :]
+                    coords['z'] = z
+                    coords['c'] = c
             else:
                 self.reader.bundle_axes = 'cyx'
                 if merge:
                     image = self.reader[frame][:, :, :]
                 else:
                     image = self.reader[frame][c, :, :]
+                    coords['c'] = c
         elif z is not None:
             self.reader.bundle_axes = 'zyx'
             image = self.reader[frame][z, :, :]
+            coords['z'] = z
         else:
             self.reader.bundle_axes = 'yx'
             image = self.reader[frame][:, :]
 
         for fname in self.process_funcs:
+            image.metadata['coords'] = coords
             image = self.process_funcs[fname](image)
 
         if merge:
@@ -331,7 +348,10 @@ class Viewer:
             self.sliders[prop]['play_btn'].update()
             if prop == 't':
                 self.sliders[prop]['fps'] = np.round(self.builder.tkvariables.__getitem__('fps').get(), 1)
-            timeout = int(round(1.0 / self.sliders[prop]['fps'] * 1000.0))
+            play_fps = self.sliders[prop]['fps']
+            if play_fps <= 0:
+                play_fps = fps
+            timeout = int(round(1.0 / play_fps * 1000.0))
             self.update_statusbar("Playing axis '%s' @ %.1f FPS" % (prop, self.sliders[prop]['fps']))
             if self._play_job:
                 self.mainwindow.after_cancel(self._play_job)
@@ -476,5 +496,5 @@ class Viewer:
 
             # PIMS v0.4 export() has a bug having to do with float precision
             # fix that here using limit_denominator() from fractions
-            export(pipeline(to_rgb_uint8)(self.processed_reader), filename, Fraction(rate).limit_denominator(66535), **kwargs)
+            export(pipeline(to_rgb_uint8)(self.reader), filename, Fraction(rate).limit_denominator(66535), **kwargs)
             self.update_statusbar(override='Done saving to "{}"'.format(filename))
