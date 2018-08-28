@@ -4,16 +4,9 @@ from __future__ import (absolute_import, division, print_function,
 import numpy as np
 from .utils import df_add_row, AnchoredScaleBar
 from collections import deque
-
-try:
-    import tkinter as tk
-    import tkinter.ttk as ttk
-    import tkinter.font as font
-except ImportError: # Python 2
-    import Tkinter as tk
-    import ttk
-    import tkFont as font
-
+import tkinter as tk
+import tkinter.ttk as ttk
+import tkinter.font as font
 from tkinter.colorchooser import askcolor
 from pims.display import to_rgb
 

@@ -1,8 +1,4 @@
-try:
-    import tkinter as Tk
-except ImportError: # Python 2
-    import Tkinter as Tk
-
+import tkinter as Tk
 import os
 from matplotlib import rcParams
 from matplotlib.figure import Figure
