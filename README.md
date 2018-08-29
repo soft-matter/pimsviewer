@@ -161,3 +161,6 @@ viewer = Viewer(reader) + Locate
 viewer.run()
 ```
 
+# Authors
+
+Pimsviewer version 1.0 (based on Qt) was written by [Casper van der Wel](https://github.com/caspervdw), version 2.0 (based on Tkinter) was written by [Ruben Verweij](https://github.com/rbnvrw). 
