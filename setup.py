@@ -24,6 +24,11 @@ setup_parameters = dict(
                       'pillow', 'click', 'slicerator', 'pygubu'],
     python_requires='>=3.0',
     packages=['pimsviewer'],
+    package_data={
+        'pimsviewer': [
+            'interface.ui',
+            ]
+    },
     long_description=descr,
     entry_points={
         'gui_scripts': [
