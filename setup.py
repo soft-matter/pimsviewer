@@ -22,6 +22,7 @@ setup_parameters = dict(
     url="https://github.com/soft-matter/pimsviewer",
     install_requires=['scikit-image>=0.11', 'matplotlib>=2.2.2', 'pims>=0.4',
                       'pillow', 'click', 'slicerator', 'pygubu'],
+    include_package_data=True,
     python_requires='>=3.0',
     packages=['pimsviewer'],
     long_description=descr,

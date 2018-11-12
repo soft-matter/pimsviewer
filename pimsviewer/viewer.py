@@ -20,7 +20,7 @@ from pims.display import to_rgb
 from pims.utils.sort import natural_keys
 
 from os import listdir, path
-from os.path import isfile, join
+from os.path import isfile, join, realpath
 from fractions import Fraction
 from .utils import get_supported_extensions, memoize, drop_dot, to_rgb_uint8
 from .navigation_toolbar_pims import NavigationToolbarPims
@@ -287,6 +287,12 @@ class Viewer:
                 'current': 1,
                 'fps': fps
         }
+
+
+        play_img = tk.PhotoImage(file=path.join(path.dirname(realpath(__file__)), "../images/play.png"))
+        for prop in self.sliders.keys():
+            self.sliders[prop]['play_btn'].configure(image=play_img, height=18, width=18, text='')
+            self.sliders[prop]['play_btn'].image = play_img
 
         self.hide_all_sliders()
 
