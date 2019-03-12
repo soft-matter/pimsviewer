@@ -47,6 +47,7 @@ class Viewer:
         
         # 3: Create the toplevel widget.
         self.mainwindow = builder.get_object('Toplevel_1')
+        self.mainwindow.protocol("WM_DELETE_WINDOW", self.quit)
         self._dpi = self.mainwindow.winfo_fpixels('1i')
         self.frame = builder.get_object('Frame_1')
         self.frame.pack(fill=tk.BOTH, expand=True)
@@ -58,7 +59,6 @@ class Viewer:
         self.pluginmenu = builder.get_object('PluginsMenu', self.mainmenu)
         #@TODO: make a more general method to initialize plugins
         ColorPlugin.add_menu_item(self, self.pluginmenu)
-
 
         self.statusbar = builder.get_object('StatusBar')
 
@@ -73,14 +73,13 @@ class Viewer:
         self._play_job = None
         self.filename = filename
         self.figure, self.ax = self.create_figure()
-        self.image = None
-        self._bg_cache = None
+        self._cache_figure, self._cache_ax = self.create_figure()
         self.index = {}
         self.canvas_frame = builder.get_object('CanvasFrame')
         self.toolbar = None
-        self.canvas = self.init_canvas()
-        self.photo = None
+        self.canvas, self._cache_canvas = self.init_canvas()
         self._cache_t = None
+        self.image = None
 
         # 7: Connect callback functions
         builder.connect_callbacks(self)
@@ -96,6 +95,10 @@ class Viewer:
         return fig, ax
 
     def quit(self, event=None):
+        if self._play_job is not None:
+            self.mainwindow.after_cancel(self._play_job)
+        if self._slider_job is not None:
+            self.mainwindow.after_cancel(self._slider_job)
         self.mainwindow.quit()
 
     def run(self):
@@ -108,13 +111,12 @@ class Viewer:
                 return
             self.filename = filename
         self.reader = pims.open(self.filename)
-        self.image = None
-        self.show_frame()
         self.update_statusbar()
         self.init_sliders()
+        self.show_frame()
 
     def close_file(self, event=None):
-        self.reader = self.image = self.filename = self._bg_cache = None
+        self.reader = self.filename = None
         self.update_statusbar()
         self.hide_all_sliders()
         self.ax.clear()
@@ -130,7 +132,7 @@ class Viewer:
     def change_merge_channels(self, event=None):
         self.show_frame()
 
-    def show_frame(self, draw=True):
+    def show_frame(self):
         frame_no = self.sliders['t']['current'] - 1
         channel_no = self.sliders['c']['current'] - 1
         z_no = self.sliders['z']['current'] - 1
@@ -140,23 +142,21 @@ class Viewer:
         if 'c' in self.reader.sizes:
             if 'z' in self.reader.sizes:
                 self.index = {'t': frame_no, 'c': channel_no, 'z': z_no}
-                merge = 'selected' in self.sliders['c']['merge_btn'].state()
-                self._imshow(self.get_processed_image(frame=frame_no, z=z_no,
-                             c=channel_no, merge=merge), draw)
+                index = dict(frame=frame_no, z=z_no, c=channel_no, merge=merge)
             else:
                 self.index = {'t': frame_no, 'c': channel_no}
                 merge = 'selected' in self.sliders['c']['merge_btn'].state()
-                self._imshow(self.get_processed_image(frame=frame_no,
-                             c=channel_no, merge=merge), draw)
+                index = dict(frame=frame_no, c=channel_no, merge=merge)
         else:
             if 'z' in self.reader.sizes:
                 self.index = {'t': frame_no, 'z': z_no}
-                self._imshow(self.get_processed_image(frame=frame_no, z=z_no), draw)
+                index = dict(frame=frame_no, z=z_no)
             else:
                 self.index = {'t': frame_no}
-                self._imshow(self.get_processed_image(frame=frame_no), draw)
+                index = dict(frame=frame_no)
 
-    @lru_cache(maxsize=128)
+        self._imshow(**index)
+
     def get_processed_image(self, frame=0, z=None, c=None, merge=False):
         self.reader.iter_axes = 't'
         coords = {'t': frame}
@@ -204,18 +204,26 @@ class Viewer:
         except KeyError:
             return
 
-    def _imshow(self, image, draw=True):
+    @lru_cache(maxsize=128)
+    def get_canvas_image(self, width, height, frame=0, z=None, c=None,
+                         merge=False):
+        image = self.get_processed_image(frame, z, c, merge)
+
         if self.image is None:
-            self.image = self.ax.imshow(image, interpolation='none',
-                                        filternorm=False, resample=False)
-            self.image.set_animated(True)
-            draw = True
+            self.image = self._cache_ax.imshow(image, interpolation='none',
+                                               filternorm=False,
+                                               resample=False)
         else:
             self.image.set_data(image)
 
-        if draw:
-            self.canvas.draw()
-            self._bg_cache = self.canvas.copy_from_bbox(self.ax.bbox)
+        self._cache_canvas.draw()
+        return self._cache_canvas.copy_from_bbox(self._cache_ax.bbox)
+
+    def _imshow(self, **kwargs):
+        width, height = self.canvas.get_width_height()
+        canvas_image = self.get_canvas_image(width, height, **kwargs)
+        self.canvas.restore_region(canvas_image)
+        self.canvas.blit(self.ax.bbox)
 
     def on_slider_change(self, event=None):
         if self._slider_job:
@@ -235,7 +243,9 @@ class Viewer:
                     self.sliders[prop]['value_label'].update()
                     self.sliders[prop]['current'] = value
         
+        self._cache_t = None
         self.show_frame()
+        self.prepopulate_cache()
         self._slider_job = None
 
     def init_sliders(self):
@@ -263,7 +273,7 @@ class Viewer:
                     except AttributeError:
                         self.sliders[prop]['fps'] = np.round(fps, 1)
                     self.builder.tkvariables.__getitem__('fps').set(self.sliders[prop]['fps'])
-                    self._play_job = self.mainwindow.after(100, self.prepopulate_cache)
+                    self._play_job = self.mainwindow.after(10, self.prepopulate_cache)
 
     def hide_all_sliders(self):
         for prop in self.sliders.keys():
@@ -321,6 +331,17 @@ class Viewer:
         self.statusbar.configure(text=text)
         self.statusbar.update()
 
+    def configure_canvas(self, event):
+        if self._play_job:
+            self.mainwindow.after_cancel(self._play_job)
+        
+        self.canvas.resize(event)
+        self._cache_canvas.resize(event)
+
+        self._cache_t = None
+        self.show_frame()
+        self.prepopulate_cache()
+
     def init_canvas(self):
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.canvas_frame)
         self.canvas.get_tk_widget().grid(row=1, column=0, pady=0, padx=0, sticky='nsew')
@@ -333,7 +354,12 @@ class Viewer:
 
         message = self.toolbar.get_message_label()
         message.grid(row=0)
-        return self.canvas
+
+        self._cache_canvas = FigureCanvasTkAgg(self._cache_figure, master=self.mainwindow)
+
+        self.canvas.get_tk_widget().bind("<Configure>", self.configure_canvas)
+
+        return self.canvas, self._cache_canvas
 
     def set_accelerators(self):
         self.mainwindow.bind_all("<Control-q>", self.quit)
@@ -364,6 +390,8 @@ class Viewer:
             play_fps = self.sliders[prop]['fps']
             if play_fps <= 0:
                 play_fps = fps
+            elif play_fps > 10.0:
+                play_fps = 10.0
             timeout = int(round(1.0 / play_fps * 1000.0))
             if timeout < 1.0:
                 timeout = 1.0
@@ -379,7 +407,7 @@ class Viewer:
             self.sliders[prop]['play_btn'].update()
             self.update_statusbar()
             self._playing = None
-            self._play_job = self.mainwindow.after(100, self.prepopulate_cache)
+            self._play_job = self.mainwindow.after(10, self.prepopulate_cache)
 
     def prepopulate_cache(self):
         if self._playing is not None:
@@ -393,12 +421,14 @@ class Viewer:
         if 't' not in self.reader.sizes:
             return
 
-        info = self.get_processed_image.cache_info()
-        if info.currsize >= info.maxsize:
-            return
-
         if self._cache_t is None:
             self._cache_t = self.sliders['t']['current'] - 1
+
+        current_t = self.sliders['t']['current'] - 1
+
+        info = self.get_canvas_image.cache_info()
+        if abs(self._cache_t-current_t) >= (info.maxsize-1):
+            return
 
         index = {}
         frame_no = self._cache_t + 1
@@ -419,10 +449,10 @@ class Viewer:
             else:
                 index = {'frame': frame_no}
 
-        self.get_processed_image(**index)
-        self._cache_t += 1
-
-        self._play_job = self.mainwindow.after(100, self.prepopulate_cache)
+        width, height = self.canvas.get_width_height()
+        self.get_canvas_image(width, height, **index)
+        self._cache_t = frame_no
+        self._play_job = self.mainwindow.after(10, self.prepopulate_cache)
 
     def play(self, timeout, prop):
         if self._playing is None or self._playing != prop:
@@ -437,9 +467,7 @@ class Viewer:
         self.sliders[prop]['slider'].set(new_value)
         self._on_slider_change(override_playing=True)
 
-        self.canvas.restore_region(self._bg_cache)
-        self.show_frame(draw=False)
-        self.canvas.blit(self.ax.bbox)
+        self.show_frame()
 
         if timeout < 1.0:
             timeout = 1.0
