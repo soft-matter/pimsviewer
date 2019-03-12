@@ -18,11 +18,12 @@ from slicerator import pipeline
 from pims import export
 from pims.display import to_rgb
 from pims.utils.sort import natural_keys
+from functools import lru_cache
 
 from os import listdir, path
 from os.path import isfile, join, realpath
 from fractions import Fraction
-from .utils import get_supported_extensions, memoize, drop_dot, to_rgb_uint8
+from .utils import get_supported_extensions, drop_dot, to_rgb_uint8
 from .navigation_toolbar_pims import NavigationToolbarPims
 from .plugins import ColorPlugin
 import io
@@ -73,11 +74,13 @@ class Viewer:
         self.filename = filename
         self.figure, self.ax = self.create_figure()
         self.image = None
+        self._bg_cache = None
         self.index = {}
         self.canvas_frame = builder.get_object('CanvasFrame')
         self.toolbar = None
         self.canvas = self.init_canvas()
         self.photo = None
+        self._cache_t = None
 
         # 7: Connect callback functions
         builder.connect_callbacks(self)
@@ -111,12 +114,12 @@ class Viewer:
         self.init_sliders()
 
     def close_file(self, event=None):
-        self.reader = self.image = self.filename = None
+        self.reader = self.image = self.filename = self._bg_cache = None
         self.update_statusbar()
         self.hide_all_sliders()
         self.ax.clear()
         self.ax.axis('off')
-        self.canvas.draw_idle()
+        self.canvas.draw()
 
     def merge_channels(self, image):
         if len(image.shape) == 3 and image.shape[2] == 3:
@@ -127,36 +130,38 @@ class Viewer:
     def change_merge_channels(self, event=None):
         self.show_frame()
 
-    def show_frame(self):
+    def show_frame(self, draw=True):
         frame_no = self.sliders['t']['current'] - 1
         channel_no = self.sliders['c']['current'] - 1
         z_no = self.sliders['z']['current'] - 1
-
 
         if not hasattr(self.reader, 'sizes'):
             self.reader.sizes = {}
         if 'c' in self.reader.sizes:
             if 'z' in self.reader.sizes:
                 self.index = {'t': frame_no, 'c': channel_no, 'z': z_no}
-                self._imshow(self.get_processed_image(frame=frame_no, z=z_no, c=channel_no))
+                merge = 'selected' in self.sliders['c']['merge_btn'].state()
+                self._imshow(self.get_processed_image(frame=frame_no, z=z_no,
+                             c=channel_no, merge=merge), draw)
             else:
                 self.index = {'t': frame_no, 'c': channel_no}
-                self._imshow(self.get_processed_image(frame=frame_no, c=channel_no))
+                merge = 'selected' in self.sliders['c']['merge_btn'].state()
+                self._imshow(self.get_processed_image(frame=frame_no,
+                             c=channel_no, merge=merge), draw)
         else:
             if 'z' in self.reader.sizes:
                 self.index = {'t': frame_no, 'z': z_no}
-                self._imshow(self.get_processed_image(frame=frame_no, z=z_no))
+                self._imshow(self.get_processed_image(frame=frame_no, z=z_no), draw)
             else:
                 self.index = {'t': frame_no}
-                self._imshow(self.get_processed_image(frame=frame_no))
+                self._imshow(self.get_processed_image(frame=frame_no), draw)
 
-    def get_processed_image(self, frame=0, z=None, c=None):
+    @lru_cache(maxsize=128)
+    def get_processed_image(self, frame=0, z=None, c=None, merge=False):
         self.reader.iter_axes = 't'
-        merge = False
         coords = {'t': frame}
 
         if c is not None:
-            merge = 'selected' in self.sliders['c']['merge_btn'].state()
             if z is not None:
                 self.reader.bundle_axes = 'czyx'
                 if merge:
@@ -199,12 +204,18 @@ class Viewer:
         except KeyError:
             return
 
-    def _imshow(self, image):
+    def _imshow(self, image, draw=True):
         if self.image is None:
-            self.image = self.ax.imshow(image, interpolation='none')
+            self.image = self.ax.imshow(image, interpolation='none',
+                                        filternorm=False, resample=False)
+            self.image.set_animated(True)
+            draw = True
         else:
             self.image.set_data(image)
-        self.canvas.draw_idle()
+
+        if draw:
+            self.canvas.draw()
+            self._bg_cache = self.canvas.copy_from_bbox(self.ax.bbox)
 
     def on_slider_change(self, event=None):
         if self._slider_job:
@@ -252,7 +263,7 @@ class Viewer:
                     except AttributeError:
                         self.sliders[prop]['fps'] = np.round(fps, 1)
                     self.builder.tkvariables.__getitem__('fps').set(self.sliders[prop]['fps'])
-
+                    self._play_job = self.mainwindow.after(100, self.prepopulate_cache)
 
     def hide_all_sliders(self):
         for prop in self.sliders.keys():
@@ -343,6 +354,7 @@ class Viewer:
         self.toggle_play('z')
 
     def toggle_play(self, prop):
+        self._cache_t = None
         if self._playing is None:
             self._playing = prop
             self.sliders[prop]['play_btn'].configure(text='⏸')
@@ -353,7 +365,10 @@ class Viewer:
             if play_fps <= 0:
                 play_fps = fps
             timeout = int(round(1.0 / play_fps * 1000.0))
-            self.update_statusbar("Playing axis '%s' @ %.1f FPS" % (prop, self.sliders[prop]['fps']))
+            if timeout < 1.0:
+                timeout = 1.0
+            self.update_statusbar("Playing axis '%s' @ %.1f FPS" % (prop,
+                                  1.0/(timeout/1000.0)))
             if self._play_job:
                 self.mainwindow.after_cancel(self._play_job)
             self._play_job = self.mainwindow.after(timeout, self.play, timeout, prop)
@@ -364,6 +379,50 @@ class Viewer:
             self.sliders[prop]['play_btn'].update()
             self.update_statusbar()
             self._playing = None
+            self._play_job = self.mainwindow.after(100, self.prepopulate_cache)
+
+    def prepopulate_cache(self):
+        if self._playing is not None:
+            return
+
+        self._playing = None
+
+        if self._play_job:
+            self.mainwindow.after_cancel(self._play_job)
+
+        if 't' not in self.reader.sizes:
+            return
+
+        info = self.get_processed_image.cache_info()
+        if info.currsize >= info.maxsize:
+            return
+
+        if self._cache_t is None:
+            self._cache_t = self.sliders['t']['current'] - 1
+
+        index = {}
+        frame_no = self._cache_t + 1
+        channel_no = self.sliders['c']['current'] - 1
+        z_no = self.sliders['z']['current'] - 1
+
+        if 'c' in self.reader.sizes:
+            if 'z' in self.reader.sizes:
+                merge = 'selected' in self.sliders['c']['merge_btn'].state()
+                index = {'frame': frame_no, 'c': channel_no, 'z': z_no,
+                         'merge': merge}
+            else:
+                merge = 'selected' in self.sliders['c']['merge_btn'].state()
+                index = {'frame': frame_no, 'c': channel_no, 'merge': merge}
+        else:
+            if 'z' in self.reader.sizes:
+                index = {'frame': frame_no, 'z': z_no}
+            else:
+                index = {'frame': frame_no}
+
+        self.get_processed_image(**index)
+        self._cache_t += 1
+
+        self._play_job = self.mainwindow.after(100, self.prepopulate_cache)
 
     def play(self, timeout, prop):
         if self._playing is None or self._playing != prop:
@@ -378,8 +437,12 @@ class Viewer:
         self.sliders[prop]['slider'].set(new_value)
         self._on_slider_change(override_playing=True)
 
-        self.show_frame()
+        self.canvas.restore_region(self._bg_cache)
+        self.show_frame(draw=False)
+        self.canvas.blit(self.ax.bbox)
 
+        if timeout < 1.0:
+            timeout = 1.0
         self._play_job = self.mainwindow.after(timeout, self.play, timeout, prop)
 
     def open_next_file(self, event=None, forward=True):
@@ -413,9 +476,8 @@ class Viewer:
     def open_previous_file(self, event=None):
         self.open_next_file(forward=False)
 
-
     @staticmethod
-    @memoize
+    @lru_cache(maxsize=512)
     def _get_all_files_in_dir(directory, extensions=None):
         if extensions is None:
             file_list = [f for f in listdir(directory) if isfile(join(directory, f))]

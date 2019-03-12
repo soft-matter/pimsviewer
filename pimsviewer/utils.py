@@ -5,6 +5,7 @@ import functools
 
 import numpy as np
 import pims
+from functools import lru_cache
 from pims import to_rgb, normalize
 from pims.base_frames import FramesSequence, FramesSequenceND
 from itertools import chain
@@ -12,21 +13,7 @@ from matplotlib.offsetbox import AnchoredOffsetbox
 from matplotlib.patches import Rectangle
 from matplotlib.offsetbox import AuxTransformBox, VPacker, HPacker, TextArea, DrawingArea
 
-
-def memoize(obj):
-    """Memoize the function call result"""
-    cache = obj.cache = {}
-
-    @functools.wraps(obj)
-    def memoizer(*args, **kwargs):
-        """Memoize by storing the results in a dict"""
-        key = str(args) + str(kwargs)
-        if key not in cache:
-            cache[key] = obj(*args, **kwargs)
-        return cache[key]
-
-    return memoizer
-
+CACHE_MAXSIZE = 512
 
 def recursive_subclasses(cls):
     "Return all subclasses (and their subclasses, etc.)."
@@ -34,22 +21,20 @@ def recursive_subclasses(cls):
     return (cls.__subclasses__() +
             [g for s in cls.__subclasses__() for g in recursive_subclasses(s)])
 
-
 def drop_dot(s):
     if s.startswith('.'):
         return s[1:]
     else:
         return s
 
-
-@memoize
+@lru_cache(maxsize=CACHE_MAXSIZE)
 def get_available_readers():
     readers = set(chain(recursive_subclasses(FramesSequence),
                         recursive_subclasses(FramesSequenceND)))
     readers = [cls for cls in readers if not hasattr(cls, 'no_reader')]
     return readers
 
-
+@lru_cache(maxsize=CACHE_MAXSIZE)
 def get_supported_extensions():
     # list all readers derived from the pims baseclasses
     all_handlers = chain(recursive_subclasses(FramesSequence),
