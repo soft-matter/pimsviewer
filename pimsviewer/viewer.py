@@ -80,6 +80,7 @@ class Viewer:
         self.canvas, self._cache_canvas = self.init_canvas()
         self._cache_t = None
         self.image = None
+        self._cache_image = None
 
         # 7: Connect callback functions
         builder.connect_callbacks(self)
@@ -205,23 +206,31 @@ class Viewer:
             return
 
     @lru_cache(maxsize=128)
-    def get_canvas_image(self, width, height, frame=0, z=None, c=None,
-                         merge=False):
+    def get_canvas_image(self, limits, frame=0, z=None, c=None, merge=False):
         image = self.get_processed_image(frame, z, c, merge)
 
-        if self.image is None:
-            self.image = self._cache_ax.imshow(image, interpolation='none',
-                                               filternorm=False,
-                                               resample=False)
+        if self._cache_image is None:
+            self._cache_image = self._cache_ax.imshow(image,
+                                                      interpolation='none',
+                                                      filternorm=False,
+                                                      resample=False)
         else:
-            self.image.set_data(image)
+            self._cache_image.set_data(image)
+
+        self._cache_ax.set_xlim(limits[0][0], limits[0][1])
+        self._cache_ax.set_ylim(limits[1][0], limits[1][1])
 
         self._cache_canvas.draw()
-        return self._cache_canvas.copy_from_bbox(self._cache_ax.bbox)
+        return self._cache_canvas.copy_from_bbox(self._cache_ax.bbox), image
 
     def _imshow(self, **kwargs):
-        width, height = self.canvas.get_width_height()
-        canvas_image = self.get_canvas_image(width, height, **kwargs)
+        limits = (self.ax.get_xlim(), self.ax.get_ylim())
+        canvas_image, image = self.get_canvas_image(limits, **kwargs)
+        
+        if self.image is None:
+            self.image = self.ax.imshow(image, interpolation='none',
+                                        filternorm=False, resample=False)
+
         self.canvas.restore_region(canvas_image)
         self.canvas.blit(self.ax.bbox)
 
@@ -335,7 +344,6 @@ class Viewer:
         if self._play_job:
             self.mainwindow.after_cancel(self._play_job)
         
-        self.canvas.resize(event)
         self._cache_canvas.resize(event)
 
         self._cache_t = None
@@ -357,7 +365,7 @@ class Viewer:
 
         self._cache_canvas = FigureCanvasTkAgg(self._cache_figure, master=self.mainwindow)
 
-        self.canvas.get_tk_widget().bind("<Configure>", self.configure_canvas)
+        self.canvas.mpl_connect('resize_event', self.configure_canvas)
 
         return self.canvas, self._cache_canvas
 
@@ -449,8 +457,8 @@ class Viewer:
             else:
                 index = {'frame': frame_no}
 
-        width, height = self.canvas.get_width_height()
-        self.get_canvas_image(width, height, **index)
+        limits = (self.ax.get_xlim(), self.ax.get_ylim())
+        self.get_canvas_image(limits, **index)
         self._cache_t = frame_no
         self._play_job = self.mainwindow.after(10, self.prepopulate_cache)
 
