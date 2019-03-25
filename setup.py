@@ -25,6 +25,11 @@ setup_parameters = dict(
     include_package_data=True,
     python_requires='>=3.0',
     packages=['pimsviewer'],
+    package_data={
+        'pimsviewer': [
+            'interface.ui',
+            ]
+    },
     long_description=descr,
     entry_points={
         'gui_scripts': [
