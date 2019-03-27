@@ -1,12 +1,15 @@
 import pims
 import numpy as np
-from PyQt5.QtCore import QDir, Qt, QSize, QRectF
+from PyQt5.QtCore import QDir, Qt, QSize, QRectF, pyqtSignal, QPointF
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
 from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QGraphicsView, QGraphicsScene)
 
 from pimsviewer.pims_image import PimsImage
 
 class ImageWidget(QGraphicsView):
+
+    hover_event = pyqtSignal(QPointF)
+
     def __init__(self, parent=None):
         super(ImageWidget, self).__init__(parent)
 
@@ -14,7 +17,7 @@ class ImageWidget(QGraphicsView):
         self.scene.setSceneRect(QRectF())
         self.setScene(self.scene)
 
-        self.image = PimsImage()
+        self.image = PimsImage(self)
         self.scene.addItem(self.image)
 
         self.setDragMode(QGraphicsView.ScrollHandDrag)

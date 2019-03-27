@@ -29,6 +29,7 @@ class GUI(QMainWindow):
 
         self.image = ImageWidget(parent=self)
         self.setCentralWidget(self.image)
+        self.image.hover_event.connect(self.image_hover_event)
         self.reader = None
         self.dimensions = {}
         self.filename = None
@@ -169,6 +170,9 @@ class GUI(QMainWindow):
 
         self.reader.iter_axes = dimension.name
         self.showFrame()
+
+    def image_hover_event(self, point):
+        self.statusBar.showMessage('[%.1f, %.1f]' % (point.x(), point.y()))
 
     def update_dimensions(self):
         sizes = self.reader.sizes
