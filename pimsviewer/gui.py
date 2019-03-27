@@ -241,7 +241,7 @@ class GUI(QMainWindow):
 
 
 @click.command()
-@click.option('--filepath', '-f', 'filepath', type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True))
+@click.argument('filepath', required=False, type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True))
 def run(filepath):
     app = QApplication(sys.argv)
     gui = GUI()
