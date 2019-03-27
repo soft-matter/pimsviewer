@@ -135,7 +135,7 @@ class GUI(QMainWindow):
                 "<p><b>Interactive Tracking</b> allows you to track features interactively.</p>" +
                 "<p>Created by Ruben Verweij. See <a href='https://github.com/rbnvrw/interactive-tracking'>GitHub</a> for more information.</p>")
 
-    def open(self, fileName=None):
+    def open(self, checked=False, fileName=None):
         if fileName is None:
             fileName, _ = QFileDialog.getOpenFileName(self, "Open File", QDir.currentPath())
         if fileName:
@@ -246,7 +246,7 @@ def run(filepath):
     app = QApplication(sys.argv)
     gui = GUI()
     if filepath is not None:
-        gui.open(filepath)
+        gui.open(fileName=filepath)
     gui.show()
 
     sys.exit(app.exec_())
