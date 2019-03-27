@@ -1,10 +1,13 @@
+import sys
+import click
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
 from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit)
 
-from interactive_tracking.image_widget import ImageWidget
-from interactive_tracking.dimension import Dimension
-from interactive_tracking.wrapped_reader import WrappedReader
+from pimsviewer.plugins import AnnotatePlugin
+from pimsviewer.image_widget import ImageWidget
+from pimsviewer.dimension import Dimension
+from pimsviewer.wrapped_reader import WrappedReader
 from nd2reader import ND2Reader  # remove after pims update
 import pims
 import numpy as np
@@ -33,6 +36,18 @@ class GUI(QMainWindow):
         self.dock_layout, docker = self.init_dock()
         self.addDockWidget(Qt.BottomDockWidgetArea, docker)
         self.init_dimensions()
+
+        self.plugins = []
+        self.pluginActions = []
+        self.init_plugins()
+
+    def init_plugins(self):
+        self.plugins = [AnnotatePlugin(parent=self)]
+        
+        for plugin in self.plugins:
+            action = QAction(plugin.name, self, triggered=plugin.activate)
+            self.pluginActions.append(action)
+            self.pluginMenu.addAction(action)
 
     def init_dock(self):
         docker = QDockWidget("Controls", self)
@@ -75,11 +90,14 @@ class GUI(QMainWindow):
         self.viewMenu.addSeparator()
         self.viewMenu.addAction(self.fitToWindowAct)
 
+        self.pluginMenu = QMenu("&Plugins", self)
+
         self.helpMenu = QMenu("&Help", self)
         self.helpMenu.addAction(self.aboutAct)
 
         self.menuBar().addMenu(self.fileMenu)
         self.menuBar().addMenu(self.viewMenu)
+        self.menuBar().addMenu(self.pluginMenu)
         self.menuBar().addMenu(self.helpMenu)
 
     def updateActions(self):
@@ -93,12 +111,15 @@ class GUI(QMainWindow):
 
     def zoomIn(self):
         self.image.scaleImage(1.25)
+        self.refreshPlugins()
 
     def zoomOut(self):
         self.image.scaleImage(0.8)
+        self.refreshPlugins()
 
     def normalSize(self):
         self.image.scaleImage(1.0, absolute=True)
+        self.refreshPlugins()
 
     def fitToWindow(self):
         fitToWindow = self.fitToWindowAct.isChecked()
@@ -107,13 +128,16 @@ class GUI(QMainWindow):
         self.image.doResize()
         self.updateActions()
 
+        self.refreshPlugins()
+
     def about(self):
         QMessageBox.about(self, "About Interactive Tracking",
                 "<p><b>Interactive Tracking</b> allows you to track features interactively.</p>" +
                 "<p>Created by Ruben Verweij. See <a href='https://github.com/rbnvrw/interactive-tracking'>GitHub</a> for more information.</p>")
 
-    def open(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Open File", QDir.currentPath())
+    def open(self, fileName=None):
+        if fileName is None:
+            fileName, _ = QFileDialog.getOpenFileName(self, "Open File", QDir.currentPath())
         if fileName:
             try:
                 self.reader = WrappedReader(pims.open(fileName))
@@ -201,6 +225,11 @@ class GUI(QMainWindow):
         frame = pims.to_rgb(frame, colors=colors)
         return frame
 
+    def refreshPlugins(self):
+        for plugin in self.plugins:
+            if plugin.active:
+                plugin.showFrame(self.image, self.dimensions)
+
     def showFrame(self):
         if len(self.dimensions) == 0:
             self.update_dimensions()
@@ -208,9 +237,19 @@ class GUI(QMainWindow):
         image_data = self.get_current_frame()
         self.image.setPixmap(image_data)
 
-if __name__ == '__main__':
-    import sys
+        self.refreshPlugins()
+
+
+@click.command()
+@click.option('--filepath', '-f', 'filepath', type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True))
+def run(filepath):
     app = QApplication(sys.argv)
     gui = GUI()
+    if filepath is not None:
+        gui.open(filepath)
     gui.show()
+
     sys.exit(app.exec_())
+
+if __name__ == '__main__':
+    run()

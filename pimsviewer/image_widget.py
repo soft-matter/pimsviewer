@@ -4,7 +4,7 @@ from PyQt5.QtCore import QDir, Qt, QSize, QRectF
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
 from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QGraphicsView, QGraphicsScene)
 
-from interactive_tracking.pims_image import PimsImage
+from pimsviewer.pims_image import PimsImage
 
 class ImageWidget(QGraphicsView):
     def __init__(self, parent=None):
@@ -22,6 +22,12 @@ class ImageWidget(QGraphicsView):
         self.fitWindow = True
 
         self.doResize()
+
+    def addItemToScene(self, item):
+        self.scene.addItem(item)
+
+    def removeItemFromScene(self, item):
+        self.scene.removeItem(item)
 
     def setPixmap(self, pixmap):
         if not isinstance(pixmap, QPixmap):
@@ -47,8 +53,11 @@ class ImageWidget(QGraphicsView):
 
         if not self.fitWindow:
             self.image.setScale(factor)
-            self.centerOn(self.image)
         else:
             self.fitInView(self.image, Qt.KeepAspectRatio)
+
+    @property
+    def scaleFactor(self):
+        return self.image.scale()
 
 
