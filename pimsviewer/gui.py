@@ -137,6 +137,9 @@ class GUI(QMainWindow):
                 "<p>Created by Ruben Verweij. See <a href='https://github.com/rbnvrw/interactive-tracking'>GitHub</a> for more information.</p>")
 
     def open(self, checked=False, fileName=None):
+        if self.reader is not None:
+            self.close_file()
+
         if fileName is None:
             fileName, _ = QFileDialog.getOpenFileName(self, "Open File", QDir.currentPath())
         if fileName:
@@ -152,6 +155,12 @@ class GUI(QMainWindow):
 
             self.fitToWindowAct.setEnabled(True)
             self.updateActions()
+
+    def close_file(self):
+        self.reader.close()
+        self.reader = None
+        self.filename = None
+
 
     def init_dimensions(self):
         for dim in 'tzcxy':
@@ -177,9 +186,14 @@ class GUI(QMainWindow):
     def update_dimensions(self):
         sizes = self.reader.sizes
 
-        for dim in sizes:
-            self.dimensions[dim].size = sizes[dim]
-            self.dimensions[dim].enable()
+        for dim in self.dimensions:
+            if dim in sizes:
+                self.dimensions[dim].size = sizes[dim]
+                self.dimensions[dim].enable()
+            else:
+                self.dimensions[dim].size = 0
+                self.dimensions[dim].disable()
+                self.dimensions[dim].hide()
 
         # current playing axis
         self.reader.iter_axes = ''
