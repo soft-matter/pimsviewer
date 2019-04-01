@@ -1,11 +1,13 @@
+import os
 import sys
 import click
+from PyQt5 import uic
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
 from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit)
 
 from pimsviewer.plugins import AnnotatePlugin
-from pimsviewer.image_widget import ImageWidget
+from pimsviewer.imagewidget import ImageWidget
 from pimsviewer.dimension import Dimension
 from pimsviewer.wrapped_reader import WrappedReader
 from nd2reader import ND2Reader  # remove after pims update
@@ -18,24 +20,18 @@ class GUI(QMainWindow):
     def __init__(self):
         super(GUI, self).__init__()
 
-        self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-
-        self.createActions()
-        self.createMenus()
+        dirname = os.path.dirname(os.path.realpath(__file__))
+        uic.loadUi(os.path.join(dirname, 'mainwindow.ui'), self)
 
         self.setWindowTitle(self.name)
-        self.resize(500, 400)
+        self.setCentralWidget(self.imageView)
+        self.setStatusBar(self.statusbar)
 
-        self.image = ImageWidget(parent=self)
-        self.setCentralWidget(self.image)
-        self.image.hover_event.connect(self.image_hover_event)
+        self.imageView.hover_event.connect(self.image_hover_event)
         self.reader = None
         self.dimensions = {}
         self.filename = None
 
-        self.dock_layout, docker = self.init_dock()
-        self.addDockWidget(Qt.BottomDockWidgetArea, docker)
         self.init_dimensions()
 
         self.plugins = []
@@ -48,93 +44,46 @@ class GUI(QMainWindow):
         for plugin in self.plugins:
             action = QAction(plugin.name, self, triggered=plugin.activate)
             self.pluginActions.append(action)
-            self.pluginMenu.addAction(action)
-
-    def init_dock(self):
-        docker = QDockWidget("Controls", self)
-        vbox = QVBoxLayout()
-
-        dock = QWidget()
-        dock.setLayout(vbox)
-        docker.setWidget(dock)
-
-        return vbox, docker
+            self.menuPlugins.addAction(action)
 
     def add_to_dock(self, widget):
-        self.dock_layout.addWidget(widget)
-
-    def createActions(self):
-        self.openAct = QAction("&Open...", self, shortcut="Ctrl+O", triggered=self.open)
-
-        self.exitAct = QAction("E&xit", self, shortcut="Ctrl+Q", triggered=self.close)
-
-        self.zoomInAct = QAction("Zoom &In (25%)", self, shortcut="Ctrl++", enabled=False, triggered=self.zoomIn)
-
-        self.zoomOutAct = QAction("Zoom &Out (25%)", self, shortcut="Ctrl+-", enabled=False, triggered=self.zoomOut)
-
-        self.normalSizeAct = QAction("&Normal Size", self, shortcut="Ctrl+0", enabled=False, triggered=self.normalSize)
-
-        self.fitToWindowAct = QAction("&Fit to Window", self, enabled=False, checkable=True, shortcut="Ctrl+F", triggered=self.fitToWindow, checked=True)
-
-        self.aboutAct = QAction("&About", self, triggered=self.about)
-
-    def createMenus(self):
-        self.fileMenu = QMenu("&File", self)
-        self.fileMenu.addAction(self.openAct)
-        self.fileMenu.addSeparator()
-        self.fileMenu.addAction(self.exitAct)
-
-        self.viewMenu = QMenu("&View", self)
-        self.viewMenu.addAction(self.zoomInAct)
-        self.viewMenu.addAction(self.zoomOutAct)
-        self.viewMenu.addAction(self.normalSizeAct)
-        self.viewMenu.addSeparator()
-        self.viewMenu.addAction(self.fitToWindowAct)
-
-        self.pluginMenu = QMenu("&Plugins", self)
-
-        self.helpMenu = QMenu("&Help", self)
-        self.helpMenu.addAction(self.aboutAct)
-
-        self.menuBar().addMenu(self.fileMenu)
-        self.menuBar().addMenu(self.viewMenu)
-        self.menuBar().addMenu(self.pluginMenu)
-        self.menuBar().addMenu(self.helpMenu)
+        self.dockLayout.addWidget(widget)
 
     def updateActions(self):
-        self.zoomInAct.setEnabled(not self.fitToWindowAct.isChecked())
-        self.zoomOutAct.setEnabled(not self.fitToWindowAct.isChecked())
-        self.normalSizeAct.setEnabled(not self.fitToWindowAct.isChecked())
+        fitWidth = self.actionFit_width.isChecked()
+        self.actionZoom_in.setEnabled(not fitWidth)
+        self.actionZoom_out.setEnabled(not fitWidth)
+        self.actionNormal_size.setEnabled(not fitWidth)
 
-        if not self.fitToWindowAct.isChecked():
-            self.zoomInAct.setEnabled(True)
-            self.zoomOutAct.setEnabled(True)
+        if not fitWidth:
+            self.actionZoom_in.setEnabled(True)
+            self.actionZoom_out.setEnabled(True)
 
     def zoomIn(self):
-        self.image.scaleImage(1.25)
+        self.imageView.scaleImage(1.25)
         self.refreshPlugins()
 
     def zoomOut(self):
-        self.image.scaleImage(0.8)
+        self.imageView.scaleImage(0.8)
         self.refreshPlugins()
 
     def normalSize(self):
-        self.image.scaleImage(1.0, absolute=True)
+        self.imageView.scaleImage(1.0, absolute=True)
         self.refreshPlugins()
 
     def fitToWindow(self):
-        fitToWindow = self.fitToWindowAct.isChecked()
-        self.image.fitWindow = fitToWindow
+        fitToWindow = self.actionFit_width.isChecked()
+        self.imageView.fitWindow = fitToWindow
 
-        self.image.doResize()
+        self.imageView.doResize()
         self.updateActions()
 
         self.refreshPlugins()
 
     def about(self):
-        QMessageBox.about(self, "About Interactive Tracking",
-                "<p><b>Interactive Tracking</b> allows you to track features interactively.</p>" +
-                "<p>Created by Ruben Verweij. See <a href='https://github.com/rbnvrw/interactive-tracking'>GitHub</a> for more information.</p>")
+        QMessageBox.about(self, "About Pimsviewer",
+                "<p>Viewer for Python IMage Sequence (PIMS).</p>" +
+                "<p>See <a href='https://github.com/soft-matter/pimsviewer'>the Pimsviewer Github page</a> for more information.</p>")
 
     def open(self, checked=False, fileName=None):
         if self.reader is not None:
@@ -153,7 +102,7 @@ class GUI(QMainWindow):
             self.update_dimensions()
             self.showFrame()
 
-            self.fitToWindowAct.setEnabled(True)
+            self.actionFit_width.setEnabled(True)
             self.updateActions()
 
     def close_file(self):
@@ -181,7 +130,7 @@ class GUI(QMainWindow):
         self.showFrame()
 
     def image_hover_event(self, point):
-        self.statusBar.showMessage('[%.1f, %.1f]' % (point.x(), point.y()))
+        self.statusbar.showMessage('[%.1f, %.1f]' % (point.x(), point.y()))
 
     def update_dimensions(self):
         sizes = self.reader.sizes
@@ -246,14 +195,14 @@ class GUI(QMainWindow):
     def refreshPlugins(self):
         for plugin in self.plugins:
             if plugin.active:
-                plugin.showFrame(self.image, self.dimensions)
+                plugin.showFrame(self.imageView, self.dimensions)
 
     def showFrame(self):
         if len(self.dimensions) == 0:
             self.update_dimensions()
 
         image_data = self.get_current_frame()
-        self.image.setPixmap(image_data)
+        self.imageView.setPixmap(image_data)
 
         self.refreshPlugins()
 

@@ -21,10 +21,10 @@ setup_parameters = dict(
     author_email="ruben@lighthacking.nl",
     url="https://github.com/soft-matter/pimsviewer",
     install_requires=[],
-    include_package_data=True,
     python_requires='>=3.0',
     packages=['pimsviewer'],
-    package_data={},
+    package_dir={'pimsviewer': 'pimsviewer'},
+    package_data={'': ['*.ui']},
     long_description=descr,
     entry_points={
         'gui_scripts': [
