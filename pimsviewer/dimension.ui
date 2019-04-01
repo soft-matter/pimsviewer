@@ -21,21 +21,11 @@
     <rect>
      <x>160</x>
      <y>90</y>
-     <width>362</width>
+     <width>401</width>
      <height>80</height>
     </rect>
    </property>
    <layout class="QHBoxLayout" name="hbox">
-    <item>
-     <widget class="QLabel" name="nameLabel">
-      <property name="enabled">
-       <bool>false</bool>
-      </property>
-      <property name="text">
-       <string>name</string>
-      </property>
-     </widget>
-    </item>
     <item>
      <widget class="QPushButton" name="playButton">
       <property name="enabled">
@@ -55,7 +45,7 @@
        <bool>false</bool>
       </property>
       <property name="text">
-       <string>0</string>
+       <string>t = 0</string>
       </property>
      </widget>
     </item>
@@ -100,7 +90,7 @@
     <item>
      <widget class="QPushButton" name="fpsButton">
       <property name="text">
-       <string>10</string>
+       <string>10 fps</string>
       </property>
      </widget>
     </item>
