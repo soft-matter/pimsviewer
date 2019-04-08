@@ -1,3 +1,3 @@
-name = 'interactive_tracking'
+name = 'pimsviewer'
 
 from .gui import GUI
