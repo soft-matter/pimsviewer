@@ -34,10 +34,16 @@ class WrappedReader(object):
         return self.reader
 
     def __exit__(self):
-        self.reader.close()
+        self.close()
 
     def __repr__(self):
         return "<<WrappedReader: %s>>" % str(self.reader)
+
+    def close(self):
+        try:
+            self.reader.close()
+        except AttributeError:
+            return
 
     @property
     def fallback_sizes(self):

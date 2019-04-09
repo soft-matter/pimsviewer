@@ -2,7 +2,7 @@ import os
 from PyQt5 import uic
 from PyQt5.QtCore import QDir, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
-from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit, QCheckBox)
+from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit, QCheckBox, QInputDialog)
 
 class Dimension(QWidget):
 
@@ -29,18 +29,18 @@ class Dimension(QWidget):
         self.playButton.clicked.connect(self.click_event)
 
         self.playTimer = QTimer()
-        self.playTimer.setInterval(int(round(1000.0 / self.fps)))
         self.playTimer.timeout.connect(self.play_tick)
 
-        self.posButton.pressed.connect(self.update_position)
+        self.posButton.pressed.connect(self.update_position_from_btn)
 
         self.slider.setMaximum(self.size-1)
-        self.slider.valueChanged.connect(self.update_position)
+        self.slider.valueChanged.connect(self.update_position_from_slider)
 
         self.mergeButton.pressed.connect(self.update_merge)
         if not self.mergeable:
             self.mergeButton.hide()
 
+        self.fps = self._fps
         self.fpsButton.pressed.connect(self.fps_changed)
 
         self.hide()
@@ -49,6 +49,7 @@ class Dimension(QWidget):
         if not self.playable:
             return
 
+        self.setEnabled(True)
         self.playButton.setEnabled(True)
         self.posButton.setEnabled(True)
         self.slider.setEnabled(True)
@@ -59,6 +60,7 @@ class Dimension(QWidget):
         self.show()
 
     def disable(self):
+        self.setEnabled(False)
         self.playButton.setEnabled(False)
         self.posButton.setEnabled(False)
         self.slider.setEnabled(False)
@@ -66,8 +68,10 @@ class Dimension(QWidget):
         self.mergeButton.setEnabled(False)
 
     def fps_changed(self):
-        self.fps = 10.0
-        print('TODO: implement FPS button')
+        fps, ok = QInputDialog.getDouble(self, "Playback framerate", "New playback framerate", self.fps)
+
+        if ok:
+            self.fps = fps
 
     def click_event(self):
         if not self.playable:
@@ -104,11 +108,9 @@ class Dimension(QWidget):
     def fps(self, fps):
         fps = float(fps)
 
-        if fps > 10.0:
-            fps = 10.0
-
         self._fps = fps
         self.playTimer.setInterval(int(round(1000.0 / self._fps)))
+        self.fpsButton.setText('%d fps' % self.fps)
 
     @property
     def mergeable(self):
@@ -142,10 +144,16 @@ class Dimension(QWidget):
     def position(self):
         return self._position
 
-    def update_position(self):
-        print('TODO: update pos')
-        position = 0
-        self.position = position
+    def update_position_from_slider(self):
+        position = self.slider.value()
+        if position >= 0:
+            self.position = position
+
+    def update_position_from_btn(self):
+        position, ok = QInputDialog.getInt(self, "'%s' position" % self.name, "New '%s' position (0-%d)" % (self.name, self.size-1), self.position, 0, self.size-1)
+
+        if ok:
+            self.position = position
 
     @position.setter
     def position(self, position):
@@ -166,8 +174,7 @@ class Dimension(QWidget):
             self.play_event.emit(self)
 
     def update_merge(self):
-        print('TODO: update merge')
-        merge = False
+        merge = self.mergeButton.isChecked()
         if merge != self.merge:
             self.merge = merge
             self.play_event.emit(self)

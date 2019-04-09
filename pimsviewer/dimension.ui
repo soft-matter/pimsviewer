@@ -5,26 +5,12 @@
   <property name="enabled">
    <bool>false</bool>
   </property>
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>690</width>
-    <height>300</height>
-   </rect>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+    <horstretch>1</horstretch>
+    <verstretch>1</verstretch>
+   </sizepolicy>
   </property>
-  <property name="windowTitle">
-   <string>Form</string>
-  </property>
-  <widget class="QWidget" name="horizontalLayoutWidget">
-   <property name="geometry">
-    <rect>
-     <x>160</x>
-     <y>90</y>
-     <width>401</width>
-     <height>80</height>
-    </rect>
-   </property>
    <layout class="QHBoxLayout" name="hbox">
     <item>
      <widget class="QPushButton" name="playButton">
@@ -96,7 +82,6 @@
     </item>
    </layout>
   </widget>
- </widget>
  <resources/>
  <connections/>
 </ui>

@@ -110,7 +110,6 @@ class GUI(QMainWindow):
         self.reader = None
         self.filename = None
 
-
     def init_dimensions(self):
         for dim in 'tzcxy':
             self.dimensions[dim] = Dimension(dim, 0)
