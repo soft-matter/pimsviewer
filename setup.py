@@ -20,7 +20,7 @@ setup_parameters = dict(
     author="Ruben Verweij",
     author_email="ruben@lighthacking.nl",
     url="https://github.com/soft-matter/pimsviewer",
-    install_requires=['click'],
+    install_requires=['pyqt5', 'click'],
     python_requires='>=3.0',
     packages=['pimsviewer'],
     package_dir={'pimsviewer': 'pimsviewer'},
