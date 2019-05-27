@@ -8,7 +8,7 @@ class WrappedReader(object):
 
     def __getattr__(self, attr):
         try:
-            return self.reader.__getattr__(attr)
+            return getattr(self.reader, attr)
         except AttributeError:
             return self.get_fallback_function(attr)
 
@@ -78,7 +78,3 @@ class WrappedReader(object):
     @fallback_def_coords.setter
     def fallback_def_coords(self, value):
         pass
-
-
-
-

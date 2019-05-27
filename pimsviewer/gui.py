@@ -91,6 +91,7 @@ class GUI(QMainWindow):
 
         if fileName is None:
             fileName, _ = QFileDialog.getOpenFileName(self, "Open File", QDir.currentPath())
+
         if fileName:
             try:
                 self.reader = WrappedReader(pims.open(fileName))
@@ -147,8 +148,6 @@ class GUI(QMainWindow):
         self.reader.iter_axes = ''
 
         self.reader.bundle_axes = ''
-        if 'c' in self.reader.sizes:
-            self.reader.bundle_axes += 'c'
         if 'y' in self.reader.sizes:
             self.reader.bundle_axes += 'y'
         if 'x' in self.reader.sizes:
@@ -157,15 +156,17 @@ class GUI(QMainWindow):
     def get_current_frame(self):
         frame = self.reader
 
+        self.reader.default_coords = {}
         for dim in self.dimensions:
             if dim not in self.reader.sizes:
                 continue
 
             dim_obj = self.dimensions[dim]
-            if dim_obj.should_set_default_coord():
+            if dim_obj.merge and dim not in self.reader.bundle_axes:
+                self.reader.reader.bundle_axes += dim
+
+            if dim_obj.should_set_default_coord() and dim not in self.reader.bundle_axes:
                 self.reader.default_coords[dim] = dim_obj.position
-                if dim in self.reader.bundle_axes:
-                    self.reader.bundle_axes.remove(dim)
 
         # always one playing axis at a time
         if len(self.reader.iter_axes) == 0:

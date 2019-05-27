@@ -10,7 +10,7 @@ class Dimension(QWidget):
     _size = 0
     _position = 0
     _mergeable = False
-    _merge = True
+    _merge = False
     _playable = False
     _fps = 5.0
 
@@ -36,9 +36,10 @@ class Dimension(QWidget):
         self.slider.setMaximum(self.size-1)
         self.slider.valueChanged.connect(self.update_position_from_slider)
 
-        self.mergeButton.pressed.connect(self.update_merge)
+        self.mergeButton.clicked.connect(self.update_merge)
         if not self.mergeable:
             self.mergeButton.hide()
+        self._merge = self.mergeButton.isChecked()
 
         self.fps = self._fps
         self.fpsButton.pressed.connect(self.fps_changed)
@@ -174,10 +175,7 @@ class Dimension(QWidget):
             self.play_event.emit(self)
 
     def update_merge(self):
-        merge = self.mergeButton.isChecked()
-        if merge != self.merge:
-            self.merge = merge
-            self.play_event.emit(self)
+        self.merge = self.mergeButton.isChecked()
 
     @property
     def merge(self):
@@ -185,8 +183,9 @@ class Dimension(QWidget):
 
     @merge.setter
     def merge(self, merge):
-        self._merge = bool(merge)
-        self.mergeButton.setChecked(self._merge)
+        if merge != self._merge:
+            self._merge = bool(merge)
+            self.play_event.emit(self)
 
     def should_set_default_coord(self):
         if not self.mergeable and self.playable:
