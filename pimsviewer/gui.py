@@ -1,4 +1,4 @@
-import os
+from os import path
 import sys
 import click
 from PyQt5 import uic
@@ -11,6 +11,7 @@ from pimsviewer.imagewidget import ImageWidget
 from pimsviewer.dimension import Dimension
 from pimsviewer.wrapped_reader import WrappedReader
 from pimsviewer.scroll_message_box import ScrollMessageBox
+from pimsviewer.utils import get_supported_extensions, get_all_files_in_dir
 import pims
 import numpy as np
 
@@ -25,8 +26,8 @@ class GUI(QMainWindow):
     def __init__(self):
         super(GUI, self).__init__()
 
-        dirname = os.path.dirname(os.path.realpath(__file__))
-        uic.loadUi(os.path.join(dirname, 'mainwindow.ui'), self)
+        dirname = path.dirname(path.realpath(__file__))
+        uic.loadUi(path.join(dirname, 'mainwindow.ui'), self)
 
         self.setWindowTitle(self.name)
         self.setCentralWidget(self.imageView)
@@ -59,6 +60,8 @@ class GUI(QMainWindow):
         self.actionClose.setEnabled(hasfile)
         self.actionFile_information.setEnabled(hasfile)
         self.actionSave.setEnabled(hasfile)
+        self.actionOpen_next.setEnabled(hasfile)
+        self.actionOpen_previous.setEnabled(hasfile)
 
         fitWidth = self.actionFit_width.isChecked()
         self.actionZoom_in.setEnabled(not fitWidth)
@@ -152,6 +155,35 @@ class GUI(QMainWindow):
 
             self.actionFit_width.setEnabled(True)
             self.updateActions()
+
+    def open_next_prev(self):
+        direction_next = True
+        if self.sender().objectName() == "actionOpen_previous":
+            direction_next = False
+
+        supported_extensions = get_supported_extensions()
+
+        current_directory = path.dirname(self.filename)
+        file_list = get_all_files_in_dir(current_directory, extensions=supported_extensions)
+        if len(file_list) < 2:
+            self.statusbar.showMessage('No file found for opening')
+            return
+
+        try:
+            current_file_index = file_list.index(path.basename(self.filename))
+        except ValueError:
+            self.statusbar.showMessage('No file found for opening')
+            return
+
+        next_index = current_file_index + 1 if direction_next else current_file_index - 1
+        try:
+            next_file = file_list[next_index]
+        except IndexError:
+            next_index = 0 if direction_next else -1
+            next_file = file_list[next_index]
+
+        self.open(fileName=path.join(current_directory, next_file))
+
 
     def close_file(self):
         self.reader.close()
