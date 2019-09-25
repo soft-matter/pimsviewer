@@ -7,6 +7,8 @@ python:
   - "pypy3"
 
 install:
+  # needed to get xvfb running?
+  - sudo apt-get install -qq libegl1-mesa
   - conda update --yes conda
   # Append the conda-forge channel, instead of adding it. See:
   # https://github.com/conda-forge/conda-forge.github.io/issues/232)
