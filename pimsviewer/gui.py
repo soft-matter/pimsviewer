@@ -11,9 +11,13 @@ from pimsviewer.imagewidget import ImageWidget
 from pimsviewer.dimension import Dimension
 from pimsviewer.wrapped_reader import WrappedReader
 from pimsviewer.scroll_message_box import ScrollMessageBox
-from nd2reader import ND2Reader  # remove after pims update
 import pims
 import numpy as np
+
+try:
+    from nd2reader import ND2Reader  # remove after pims update
+except:
+    pass
 
 class GUI(QMainWindow):
     name = "Pimsviewer"

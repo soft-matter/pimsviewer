@@ -3,10 +3,9 @@
 
 A graphical user interface (GUI) for PIMS (screenshot below)
 
-This viewer is based on [TkInter](https://wiki.python.org/moin/TkInter) and is able to work with N-dimensional image files that are opened by PIMS.
+This viewer is based on [PyQt5](https://www.riverbankcomputing.com/software/pyqt/intro) and is able to work with N-dimensional image files that are opened by PIMS.
 
-Also, it exposes a matplotlib plotting area on which images can be (dynamically)
-annotated, making use of the `Plugin` infrastructure.
+Also, it has a plugin infrastructure that can be used to extend the main functionality.
 
 ## Installation
 
@@ -20,6 +19,20 @@ Alternatively, it can also be installed using pip:
 
 ```
 pip install pimsviewer 
+```
+
+When installing the latest source version, always install it with `pip` (and not with `python setup.py develop`, this will lead to dependency errors for `PyQt`):
+
+Normal installation:
+
+```
+pip install .
+```
+
+Development installation:
+
+```
+pip install . -e
 ```
 
 ## Starting the viewer
@@ -46,19 +59,33 @@ All examples below are also available as script files in the `examples` folder.
 You can use the viewer in a Python script as follows:
 
 ```
-from pimsviewer import Viewer
-viewer = Viewer()
-viewer.run()
+import sys
+from pimsviewer import GUI
+from PyQt5.QtWidgets import QApplication
+
+filepath = 'path/to/file'
+
+app = QApplication(sys.argv)
+gui = GUI()
+gui.open(fileName=filepath)
+gui.show()
+
+sys.exit(app.exec_())
 ```
-Optionally you may include a filename:
+
+Or, if you do not need a reference to the actual object but you just want to start the program:
 
 ```
-from pimsviewer import Viewer
-viewer = Viewer('path/to/file')
-viewer.run()
+from pimsviewer import run
+run('path/to/file')
 ```
+
+In both cases, you can omit the file path.
 
 ## Example 02: evaluating the effect of a processing function
+
+***TODO: update***
+
 This example adds a processing function that adds an adjustable amount of noise
 to an image. The amount of noise is tunable with a slider.
 
@@ -86,6 +113,9 @@ viewer.run()
 ```
 
 ## Example 03: annotating features on a video
+
+***TODO: update***
+
 This example annotates features that were obtained via trackpy onto a video.
 Note that you have to change the filepath to a video file that is supported by
 pims.
@@ -111,6 +141,9 @@ viewer.run()
 ```
 
 ## Example 04: selecting features on a video
+
+***TODO: update***
+
 This example annotates features on a video, allows to hide and move features,
 and returns the adapted dataframe. Note that you have to change the filepath
 to a video file that is supported by pims.
@@ -137,6 +170,9 @@ viewer.run()
 ```
 
 ## Example 05: designing a custom plotting function
+
+***TODO: update***
+
 This dynamically shows the effect of `tp.locate`.
 
 ```
@@ -163,4 +199,4 @@ viewer.run()
 
 # Authors
 
-Pimsviewer version 1.0 was written by [Casper van der Wel](https://github.com/caspervdw), version 2.0 was written by [Ruben Verweij](https://github.com/rbnvrw). 
+Pimsviewer version 1.0 was written by [Casper van der Wel](https://github.com/caspervdw), versions starting from 2.0 are written by [Ruben Verweij](https://github.com/rbnvrw). 
