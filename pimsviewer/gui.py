@@ -136,11 +136,15 @@ class GUI(QMainWindow):
         sizes = self.reader.sizes
 
         for dim in self.dimensions:
-            if dim in sizes:
+            if dim in sizes and sizes[dim] > 1:
                 self.dimensions[dim].size = sizes[dim]
                 self.dimensions[dim].enable()
             else:
-                self.dimensions[dim].size = 0
+                if dim in sizes:
+                    self.dimensions[dim].size = sizes[dim]
+                else:
+                    self.dimensions[dim].size = 0
+
                 self.dimensions[dim].disable()
                 self.dimensions[dim].hide()
 
@@ -154,19 +158,16 @@ class GUI(QMainWindow):
             self.reader.bundle_axes += 'x'
 
     def get_current_frame(self):
-        frame = self.reader
-
         self.reader.default_coords = {}
+        self.reader.bundle_axes = 'yx'
         for dim in self.dimensions:
             if dim not in self.reader.sizes:
                 continue
 
             dim_obj = self.dimensions[dim]
+            self.reader.default_coords[dim] = dim_obj.position
             if dim_obj.merge and dim not in self.reader.bundle_axes:
-                self.reader.reader.bundle_axes += dim
-
-            if dim_obj.should_set_default_coord() and dim not in self.reader.bundle_axes:
-                self.reader.default_coords[dim] = dim_obj.position
+                self.reader.bundle_axes += dim
 
         # always one playing axis at a time
         if len(self.reader.iter_axes) == 0:
@@ -180,16 +181,12 @@ class GUI(QMainWindow):
         except KeyError:
             i = 0
 
-        frame = self.reader[i]
+        try:
+            frame = self.reader[i]
+        except IndexError:
+            self.statusbar.showMessage('Unable to find %s=%d' % (dim_obj.name, i))
+            frame = self.reader[0]
 
-        colors = None
-        if len(frame.shape) == 3:
-            c_ix = np.argmin(frame.shape)
-            if c_ix == 2:
-                frame = frame.transpose((2, 0, 1))
-            colors = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
-
-        frame = pims.to_rgb(frame, colors=colors)
         return frame
 
     def refreshPlugins(self):
@@ -202,6 +199,11 @@ class GUI(QMainWindow):
             self.update_dimensions()
 
         image_data = self.get_current_frame()
+        for bdim in self.reader.bundle_axes:
+            if bdim in ['x', 'y']:
+                continue
+            image_data = self.dimensions[bdim].merge_image_over_dimension(image_data)
+
         self.imageView.setPixmap(image_data)
 
         self.refreshPlugins()

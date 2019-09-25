@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from PyQt5 import uic
 from PyQt5.QtCore import QDir, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
@@ -45,6 +46,23 @@ class Dimension(QWidget):
         self.fpsButton.pressed.connect(self.fps_changed)
 
         self.hide()
+
+    def merge_image_over_dimension(self, image):
+        # problem here: could be two axes with same size
+        # TODO: think of a clever fix for this
+        try:
+            ix = image.shape.index(self._size)
+        except ValueError:
+            return image
+
+        if self.name == 'c':
+            # merge colors (done in pims_image)
+            image = np.take(image, (0, 1, 2), axis=ix)
+        else:
+            # I don't know what to do, sum over axis
+            image = np.sum(image, axis=ix)
+
+        return image
 
     def enable(self):
         if not self.playable:
@@ -169,7 +187,7 @@ class Dimension(QWidget):
             self._position = position - self.size
 
         self.slider.setValue(self.position)
-        self.posButton.setText('%d' % self.position)
+        self.posButton.setText('%s=%d' % (self.name, self.position))
 
         if old_position != self.position:
             self.play_event.emit(self)
