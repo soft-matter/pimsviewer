@@ -476,12 +476,29 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>actionCopy</sender>
+   <signal>triggered()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>copy_image_to_clipboard()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>352</x>
+     <y>295</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>open()</slot>
   <slot>open_next_prev()</slot>
   <slot>close_file()</slot>
   <slot>zoomIn()</slot>
+  <slot>copy_image_to_clipboard()</slot>
   <slot>zoomOut()</slot>
   <slot>normalSize()</slot>
   <slot>fitToWindow(bool)</slot>

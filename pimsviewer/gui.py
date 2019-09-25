@@ -2,7 +2,7 @@ from os import path
 import sys
 import click
 from PyQt5 import uic
-from PyQt5.QtCore import QDir, Qt
+from PyQt5.QtCore import QDir, Qt, QMimeData
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap, QImageWriter
 from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit)
 
@@ -62,6 +62,7 @@ class GUI(QMainWindow):
         self.actionSave.setEnabled(hasfile)
         self.actionOpen_next.setEnabled(hasfile)
         self.actionOpen_previous.setEnabled(hasfile)
+        self.actionCopy.setEnabled(hasfile)
 
         fitWidth = self.actionFit_width.isChecked()
         self.actionZoom_in.setEnabled(not fitWidth)
@@ -184,6 +185,11 @@ class GUI(QMainWindow):
 
         self.open(fileName=path.join(current_directory, next_file))
 
+    def copy_image_to_clipboard(self):
+        data = QMimeData()
+        data.setImageData(self.imageView.image.pixmap())
+        app = QApplication.instance()
+        app.clipboard().setMimeData(data)
 
     def close_file(self):
         self.reader.close()
