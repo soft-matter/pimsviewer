@@ -3,7 +3,7 @@ import sys
 import click
 from PyQt5 import uic
 from PyQt5.QtCore import QDir, Qt
-from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
+from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap, QImageWriter
 from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit)
 
 from pimsviewer.plugins import AnnotatePlugin
@@ -55,7 +55,10 @@ class GUI(QMainWindow):
         self.dockLayout.addWidget(widget)
 
     def updateActions(self):
-        self.actionFile_information.setEnabled(self.reader is not None)
+        hasfile = self.reader is not None
+        self.actionClose.setEnabled(hasfile)
+        self.actionFile_information.setEnabled(hasfile)
+        self.actionSave.setEnabled(hasfile)
 
         fitWidth = self.actionFit_width.isChecked()
         self.actionZoom_in.setEnabled(not fitWidth)
@@ -91,6 +94,21 @@ class GUI(QMainWindow):
         QMessageBox.about(self, "About Pimsviewer",
                 "<p>Viewer for Python IMage Sequence (PIMS).</p>" +
                 "<p>See <a href='https://github.com/soft-matter/pimsviewer'>the Pimsviewer Github page</a> for more information.</p>")
+
+    def export(self):
+        allowed_formats = QImageWriter.supportedImageFormats()
+        allowed_formats = [str(f.data(), encoding='utf-8') for f in allowed_formats]
+        filter_string = 'Images ('
+        for f in allowed_formats:
+            filter_string += '*.%s ' % f
+        filter_string = filter_string[:-1] + ')'
+
+        fileName, _ = QFileDialog.getSaveFileName(self, "Export File", QDir.currentPath(), filter_string)
+        if not fileName:
+            return
+
+        self.imageView.image.pixmap().save(fileName)
+        self.statusbar.showMessage('Image exported to %s' % fileName)
 
     def show_file_info(self):
         items = []
@@ -139,6 +157,7 @@ class GUI(QMainWindow):
         self.reader.close()
         self.reader = None
         self.filename = None
+        self.showFrame()
 
     def init_dimensions(self):
         for dim in 'tzcxy':
@@ -224,6 +243,10 @@ class GUI(QMainWindow):
                 plugin.showFrame(self.imageView, self.dimensions)
 
     def showFrame(self):
+        if self.reader is None:
+            self.imageView.setPixmap(None)
+            return
+
         if len(self.dimensions) == 0:
             self.update_dimensions()
 

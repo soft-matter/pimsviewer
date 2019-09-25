@@ -33,6 +33,13 @@ class ImageWidget(QGraphicsView):
         self.scene.removeItem(item)
 
     def setPixmap(self, pixmap):
+        if pixmap is None:
+            self.image.setVisible(False)
+            return
+
+        if not self.image.isVisible():
+            self.image.setVisible(True)
+
         if not isinstance(pixmap, QPixmap):
             pixmap = self.image.array_to_pixmap(pixmap)
 

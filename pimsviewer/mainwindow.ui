@@ -105,7 +105,7 @@
       <verstretch>1</verstretch>
      </sizepolicy>
     </property>
-    <layout class="QVBoxLayout" name="dockLayout" stretch="">
+    <layout class="QVBoxLayout" name="dockLayout">
      <property name="spacing">
       <number>0</number>
      </property>
@@ -417,6 +417,22 @@
    <signal>triggered()</signal>
    <receiver>MainWindow</receiver>
    <slot>show_file_info()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>352</x>
+     <y>295</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>actionSave</sender>
+   <signal>triggered()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>export()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>-1</x>
