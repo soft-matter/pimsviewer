@@ -18,7 +18,7 @@ install:
   #       conda install -n testenv --yes pip
   #       pip install $DEPSPIP
   #   fi
-  - python setup.py build_ext install
+  - python -m pip install .
 
 
 before_install:

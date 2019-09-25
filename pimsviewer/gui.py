@@ -10,6 +10,7 @@ from pimsviewer.plugins import AnnotatePlugin
 from pimsviewer.imagewidget import ImageWidget
 from pimsviewer.dimension import Dimension
 from pimsviewer.wrapped_reader import WrappedReader
+from pimsviewer.scroll_message_box import ScrollMessageBox
 from nd2reader import ND2Reader  # remove after pims update
 import pims
 import numpy as np
@@ -50,6 +51,8 @@ class GUI(QMainWindow):
         self.dockLayout.addWidget(widget)
 
     def updateActions(self):
+        self.actionFile_information.setEnabled(self.reader is not None)
+
         fitWidth = self.actionFit_width.isChecked()
         self.actionZoom_in.setEnabled(not fitWidth)
         self.actionZoom_out.setEnabled(not fitWidth)
@@ -84,6 +87,28 @@ class GUI(QMainWindow):
         QMessageBox.about(self, "About Pimsviewer",
                 "<p>Viewer for Python IMage Sequence (PIMS).</p>" +
                 "<p>See <a href='https://github.com/soft-matter/pimsviewer'>the Pimsviewer Github page</a> for more information.</p>")
+
+    def show_file_info(self):
+        items = []
+
+        # Metadata
+        for prop in self.reader.metadata:
+            html = '<p><strong>%s:</strong></p><p><pre>%s</pre></p>' % (prop, self.reader.metadata[prop])
+            items.append(html)
+
+        # File path
+        html = '<p><strong>Filename:</strong></p><p>%s</p>' % (self.filename)
+        items.append(html)
+
+        # Reader
+        if isinstance(self.reader, WrappedReader):
+            reader_type = type(self.reader.reader).__name__
+        else:
+            reader_type = type(self.reader).__name__
+        html = '<p><strong>PIMS reader:</strong></p><p>%s</p><p><pre>%s</pre></p>' % (reader_type, self.reader.__repr__())
+        items.append(html)
+
+        ScrollMessageBox(items, parent=self)
 
     def open(self, checked=False, fileName=None):
         if self.reader is not None:

@@ -38,3 +38,4 @@ MANIFEST
 #PyCharm
 .idea
 tags
+.directory
