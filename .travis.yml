@@ -4,7 +4,6 @@ sudo: false
 python:
   - "3.6"
   - "3.7"
-  - "pypy3"
 
 install:
   # needed to get xvfb running?
