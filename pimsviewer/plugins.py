@@ -64,6 +64,9 @@ class AnnotatePlugin(Plugin):
         return QRectF(x_top_left, y_top_left, size, size)
 
     def showFrame(self, image_widget, dimensions):
+        if self.positions_df is None:
+            return
+
         scaleFactor = image_widget.scaleFactor
         self.clearAll(image_widget)
         frame_no = dimensions['t'].position
@@ -99,5 +102,38 @@ class AnnotatePlugin(Plugin):
         if self.app is not None:
             self.app.refreshPlugins()
 
+class ProcessingPlugin(Plugin):
+    name = 'Processing plugin (example)'
+    noise_level = 50
 
+    def __init__(self, parent=None):
+        super(ProcessingPlugin, self).__init__(parent)
+
+        self.vbox = QVBoxLayout()
+        self.setLayout(self.vbox)
+
+        self.vbox.addWidget(QLabel('Processing Plugin'))
+
+    def activate(self):
+        super(ProcessingPlugin, self).activate()
+
+        self.showFrame(self.parent().imageView, self.parent().dimensions)
+
+    def showFrame(self, image_widget, dimensions):
+        img = image_widget.image.pixmap().toImage()
+        img = img.convertToFormat(QImage.Format.Format_RGB32)
+
+        width = img.width()
+        height = img.height()
+
+        ptr = img.bits()
+        ptr.setsize(height * width * 4)
+        arr = np.frombuffer(ptr, np.uint8).reshape((height, width, 4))
+
+        arr = arr + np.random.random(arr.shape) * self.noise_level / 100 * arr.max()
+        arr = arr / np.max(arr)
+
+        qim = QImage(arr.data, arr.shape[1], arr.shape[0], arr.shape[0], QImage.Format_ARGB32)
+
+        image_widget.setPixmap(qim)
 

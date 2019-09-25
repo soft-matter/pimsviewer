@@ -6,7 +6,7 @@ from PyQt5.QtCore import QDir, Qt, QMimeData
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap, QImageWriter
 from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit)
 
-from pimsviewer.plugins import AnnotatePlugin
+from pimsviewer.plugins import AnnotatePlugin, Plugin, ProcessingPlugin
 from pimsviewer.imagewidget import ImageWidget
 from pimsviewer.dimension import Dimension
 from pimsviewer.wrapped_reader import WrappedReader
@@ -23,7 +23,7 @@ except:
 class GUI(QMainWindow):
     name = "Pimsviewer"
 
-    def __init__(self):
+    def __init__(self, extra_plugins=[]):
         super(GUI, self).__init__()
 
         dirname = path.dirname(path.realpath(__file__))
@@ -42,10 +42,18 @@ class GUI(QMainWindow):
 
         self.plugins = []
         self.pluginActions = []
-        self.init_plugins()
+        self.init_plugins(extra_plugins)
 
-    def init_plugins(self):
+    def init_plugins(self, extra_plugins=[]):
         self.plugins = [AnnotatePlugin(parent=self)]
+
+        # temp
+        extra_plugins = [ProcessingPlugin]
+
+        for plugin_name in extra_plugins:
+            extra_plugin = plugin_name(parent=self)
+            if isinstance(extra_plugin, Plugin):
+                self.plugins.append(extra_plugin)
         
         for plugin in self.plugins:
             action = QAction(plugin.name, self, triggered=plugin.activate)
@@ -295,7 +303,6 @@ class GUI(QMainWindow):
             image_data = self.dimensions[bdim].merge_image_over_dimension(image_data)
 
         self.imageView.setPixmap(image_data)
-
         self.refreshPlugins()
 
 

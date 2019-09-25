@@ -37,6 +37,9 @@ class ImageWidget(QGraphicsView):
             self.image.setVisible(False)
             return
 
+        if isinstance(pixmap, QImage):
+            pixmap = QPixmap(pixmap)
+
         if not self.image.isVisible():
             self.image.setVisible(True)
 
