@@ -1,4 +1,15 @@
-from pimsviewer import Viewer
+import sys
+from pimsviewer import GUI
+from PyQt5.QtWidgets import QApplication
 
-viewer = Viewer()
-viewer.run()
+filepath = 'path/to/file'
+
+# Class names of extra plugins to add
+plugins = []
+
+app = QApplication(sys.argv)
+gui = GUI(extra_plugins=plugins)
+gui.open(fileName=filepath)
+gui.show()
+
+sys.exit(app.exec_())

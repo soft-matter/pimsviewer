@@ -3,6 +3,7 @@ from collections import deque
 from pims.display import to_rgb
 from os import path
 
+from PIL import Image, ImageQt
 from PyQt5.QtCore import QDir, Qt, QRectF
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
 from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit, QDialog, QGraphicsEllipseItem)
@@ -102,6 +103,9 @@ class AnnotatePlugin(Plugin):
         if self.app is not None:
             self.app.refreshPlugins()
 
+# Example plugins
+# Not loaded by default
+
 class ProcessingPlugin(Plugin):
     name = 'Processing plugin (example)'
     noise_level = 50
@@ -112,7 +116,21 @@ class ProcessingPlugin(Plugin):
         self.vbox = QVBoxLayout()
         self.setLayout(self.vbox)
 
-        self.vbox.addWidget(QLabel('Processing Plugin'))
+        self.vbox.addWidget(QLabel('Example processing plugin'))
+        self.vbox.addWidget(QLabel('Add noise:'))
+
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setMinimum(10)
+        self.slider.setMaximum(100)
+        self.slider.setValue(50)
+        self.slider.setTickPosition(QSlider.TicksBelow)
+        self.slider.setTickInterval(10)
+        self.slider.valueChanged.connect(self.update_noise)
+        self.vbox.addWidget(self.slider)
+
+    def update_noise(self):
+        self.noise_level = self.slider.value()
+        self.showFrame(self.parent().imageView, self.parent().dimensions)
 
     def activate(self):
         super(ProcessingPlugin, self).activate()
@@ -120,20 +138,16 @@ class ProcessingPlugin(Plugin):
         self.showFrame(self.parent().imageView, self.parent().dimensions)
 
     def showFrame(self, image_widget, dimensions):
-        img = image_widget.image.pixmap().toImage()
-        img = img.convertToFormat(QImage.Format.Format_RGB32)
-
-        width = img.width()
-        height = img.height()
-
-        ptr = img.bits()
-        ptr.setsize(height * width * 4)
-        arr = np.frombuffer(ptr, np.uint8).reshape((height, width, 4))
+        arr = self.parent().get_current_frame()
 
         arr = arr + np.random.random(arr.shape) * self.noise_level / 100 * arr.max()
         arr = arr / np.max(arr)
 
-        qim = QImage(arr.data, arr.shape[1], arr.shape[0], arr.shape[0], QImage.Format_ARGB32)
+        arr = (arr * 255.0).astype(np.uint8)
 
-        image_widget.setPixmap(qim)
+        # Convert to image
+        image = Image.fromarray(arr)
+        image = QImage(ImageQt.ImageQt(image))
+
+        image_widget.setPixmap(image)
 

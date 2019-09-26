@@ -45,10 +45,7 @@ class GUI(QMainWindow):
         self.init_plugins(extra_plugins)
 
     def init_plugins(self, extra_plugins=[]):
-        self.plugins = [AnnotatePlugin(parent=self)]
-
-        # temp
-        extra_plugins = [ProcessingPlugin]
+        self.plugins = []
 
         for plugin_name in extra_plugins:
             extra_plugin = plugin_name(parent=self)
@@ -305,12 +302,18 @@ class GUI(QMainWindow):
         self.imageView.setPixmap(image_data)
         self.refreshPlugins()
 
-
 @click.command()
 @click.argument('filepath', required=False, type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True))
-def run(filepath):
+@click.option('--example-plugins/--no-example-plugins', default=False, help='Load additional example plugins')
+def run(filepath, example_plugins):
     app = QApplication(sys.argv)
-    gui = GUI()
+
+    if example_plugins:
+        extra_plugins = [AnnotatePlugin, ProcessingPlugin]
+    else:
+        extra_plugins = []
+
+    gui = GUI(extra_plugins=extra_plugins)
     if filepath is not None:
         gui.open(fileName=filepath)
     gui.show()
