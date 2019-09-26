@@ -38,8 +38,10 @@ class Dimension(QWidget):
         self.slider.valueChanged.connect(self.update_position_from_slider)
 
         self.mergeButton.clicked.connect(self.update_merge)
+
         if not self.mergeable:
             self.mergeButton.hide()
+
         self._merge = self.mergeButton.isChecked()
 
         self.fps = self._fps
@@ -55,10 +57,7 @@ class Dimension(QWidget):
         except ValueError:
             return image
 
-        if self.name == 'c':
-            # merge colors (done in pims_image)
-            image = np.take(image, (0, 1, 2), axis=ix)
-        else:
+        if self.name != 'c':
             # I don't know what to do, sum over axis
             image = np.sum(image, axis=ix)
 
@@ -73,9 +72,11 @@ class Dimension(QWidget):
         self.posButton.setEnabled(True)
         self.slider.setEnabled(True)
         self.fpsButton.setEnabled(True)
+
         if self.mergeable:
             self.mergeButton.setEnabled(True)
             self.mergeButton.show()
+
         self.show()
 
     def disable(self):
@@ -130,14 +131,6 @@ class Dimension(QWidget):
         self._fps = fps
         self.playTimer.setInterval(int(round(1000.0 / self._fps)))
         self.fpsButton.setText('%d fps' % self.fps)
-
-    @property
-    def mergeable(self):
-        return self._mergeable
-
-    @mergeable.setter
-    def mergeable(self, mergeable):
-        self._mergeable = bool(mergeable)
 
     @property
     def playable(self):
@@ -201,18 +194,23 @@ class Dimension(QWidget):
 
     @merge.setter
     def merge(self, merge):
+        if not self.mergeable:
+            merge = False
+
         if merge != self._merge:
             self._merge = bool(merge)
+            self.mergeButton.setChecked(self._merge)
             self.play_event.emit(self)
 
-    def should_set_default_coord(self):
-        if not self.mergeable and self.playable:
-            return True
+    @property
+    def mergeable(self):
+        return self._mergeable
 
-        if self.mergeable and not self.merge:
-            return True
-
-        return False
+    @mergeable.setter
+    def mergeable(self, mergeable):
+        self._mergeable = bool(mergeable)
+        if not mergeable:
+            self.merge = False
 
     def __len__(self):
         return self.size

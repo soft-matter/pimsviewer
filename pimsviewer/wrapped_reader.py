@@ -10,10 +10,21 @@ class WrappedReader(object):
         self._fallback_axis_order = {}
 
     def __getattr__(self, attr):
-        try:
-            return getattr(self.reader, attr)
-        except AttributeError:
+        if hasattr(self.reader, attr):
+            value = getattr(self.reader, attr)
+            self.setattr_only_self(attr, value)
+            return value
+        else:
             return self.get_fallback_function(attr)
+
+    def setattr_only_self(self, attr, value):
+        self.__dict__[attr] = value
+
+    def __setattr__(self, attr, value):
+        self.setattr_only_self(attr, value)
+
+        if attr not in ['reader', '_fallback_sizes', '_fallback_axis_order']:
+            setattr(self.reader, attr, value)
 
     def get_fallback_function(self, attr):
         if attr == 'sizes':
@@ -26,6 +37,7 @@ class WrappedReader(object):
 
     def __getitem__(self, key):
         if isinstance(self.reader, FramesSequenceND):
+            print(key)
             return self.reader[key]
         else:
             # provide a fallback for the FramesSequenceND behaviour

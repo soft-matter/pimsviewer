@@ -10,6 +10,9 @@ from itertools import chain
 from os import listdir, path
 from os.path import isfile, join
 
+from PIL import Image, ImageQt
+from PyQt5.QtGui import QImage
+
 def memoize(obj):
     """Memoize the function call result"""
     cache = obj.cache = {}
@@ -64,3 +67,11 @@ def get_all_files_in_dir(directory, extensions=None):
                      and drop_dot(path.splitext(f)[1]) in extensions]
 
     return sorted(file_list, key=natural_keys)
+
+
+def image_from_array(array):
+    # Convert to image
+    image = Image.fromarray(array)
+    image = QImage(ImageQt.ImageQt(image))
+
+    return image

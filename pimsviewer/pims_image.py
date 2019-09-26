@@ -1,9 +1,12 @@
 import pims
+import numpy as np
 from PyQt5.QtCore import QDir, Qt, QSize, QRect, pyqtSignal, QPointF
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap, QPen
 from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QLabel,
                              QMainWindow, QMenu, QMessageBox, QScrollArea,
                              QSizePolicy, QGraphicsPixmapItem)
+
+from pimsviewer.utils import image_from_array
 
 
 class PimsImage(QGraphicsPixmapItem):
@@ -19,14 +22,8 @@ class PimsImage(QGraphicsPixmapItem):
         self.parent.hover_event.emit(event.lastPos())
 
     def array_to_pixmap(self, array):
-        if len(array.shape) == 2:
-            # probably only x, y
-            array = pims.to_rgb(array)
+        array = np.swapaxes(pims.to_rgb(array), 0, 1)
 
-        height, width, colors = array.shape
-
-        bytesPerLine = 3 * width
-
-        image = QImage(array, width, height, bytesPerLine, QImage.Format_RGB888)
+        image = image_from_array(array)
 
         return QPixmap(image)

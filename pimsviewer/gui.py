@@ -149,11 +149,11 @@ class GUI(QMainWindow):
             fileName, _ = QFileDialog.getOpenFileName(self, "Open File", QDir.currentPath())
 
         if fileName:
-            try:
-                self.reader = WrappedReader(pims.open(fileName))
-            except:
-                QMessageBox.critical(self, "Error", "Cannot load %s." % fileName)
-                return
+            #try:
+            self.reader = WrappedReader(pims.open(fileName))
+            #except:
+                #QMessageBox.critical(self, "Error", "Cannot load %s." % fileName)
+                #return
 
             self.filename = fileName
             self.update_dimensions()
@@ -203,16 +203,22 @@ class GUI(QMainWindow):
         self.showFrame()
 
     def init_dimensions(self):
-        for dim in 'tzcxy':
+        for dim in 'tvzcxy':
             self.dimensions[dim] = Dimension(dim, 0)
             self.dimensions[dim].play_event.connect(self.play_event)
             if dim not in ['x', 'y']:
                 self.add_to_dock(self.dimensions[dim])
                 self.dimensions[dim].playable = True
-            if dim in ['c']:
+            if dim in ['c', 'z', 'v']:
                 self.dimensions[dim].mergeable = True
+            else:
+                self.dimensions[dim].mergeable = False
+                self.dimensions[dim].merge = False
 
     def play_event(self, dimension):
+        if not self.reader:
+            return
+
         current_player = self.reader.iter_axes[0]
         if dimension.name != current_player:
             self.dimensions[current_player].playing = False
@@ -242,23 +248,30 @@ class GUI(QMainWindow):
         # current playing axis
         self.reader.iter_axes = ''
 
-        self.reader.bundle_axes = ''
+        bundle_axes = ''
         if 'y' in self.reader.sizes:
-            self.reader.bundle_axes += 'y'
+            bundle_axes += 'y'
         if 'x' in self.reader.sizes:
-            self.reader.bundle_axes += 'x'
+            bundle_axes += 'x'
+
+        self.reader.bundle_axes = bundle_axes
 
     def get_current_frame(self):
-        self.reader.default_coords = {}
         self.reader.bundle_axes = 'yx'
+        default_coords = {}
+
         for dim in self.dimensions:
             if dim not in self.reader.sizes:
                 continue
 
             dim_obj = self.dimensions[dim]
-            self.reader.default_coords[dim] = dim_obj.position
+
+            default_coords[dim] = dim_obj.position
+
             if dim_obj.merge and dim not in self.reader.bundle_axes:
                 self.reader.bundle_axes += dim
+
+        self.reader.default_coords = default_coords
 
         # always one playing axis at a time
         if len(self.reader.iter_axes) == 0:
@@ -277,6 +290,11 @@ class GUI(QMainWindow):
         except IndexError:
             self.statusbar.showMessage('Unable to find %s=%d' % (dim_obj.name, i))
             frame = self.reader[0]
+
+        if 'c' in self.reader.bundle_axes:
+            cix = self.reader.bundle_axes.index('c')
+            if cix != 0:
+                frame = np.swapaxes(frame, 0, cix).copy()
 
         return frame
 
