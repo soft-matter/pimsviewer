@@ -1,4 +1,4 @@
 from pimsviewer import run
-from pimsviewer.plugins import AnnotatePlugin
+from pimsviewer.example_plugins import AnnotatePlugin
 
 run('path/to/file', [AnnotatePlugin])

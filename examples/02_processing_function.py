@@ -1,4 +1,4 @@
 from pimsviewer import run
-from pimsviewer.plugins import ProcessingPlugin
+from pimsviewer.example_plugins import ProcessingPlugin
 
 run('path/to/file', [ProcessingPlugin])

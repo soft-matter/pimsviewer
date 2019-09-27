@@ -6,7 +6,7 @@ from PyQt5.QtCore import QDir, Qt, QMimeData
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap, QImageWriter
 from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit)
 
-from pimsviewer.plugins import AnnotatePlugin, Plugin, ProcessingPlugin
+from pimsviewer.example_plugins import AnnotatePlugin, Plugin, ProcessingPlugin
 from pimsviewer.imagewidget import ImageWidget
 from pimsviewer.dimension import Dimension
 from pimsviewer.wrapped_reader import WrappedReader
