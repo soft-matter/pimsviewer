@@ -11,7 +11,8 @@ from os import listdir, path
 from os.path import isfile, join
 
 from PIL import Image, ImageQt
-from PyQt5.QtGui import QImage
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QImage, QPixmap
 
 def memoize(obj):
     """Memoize the function call result"""
@@ -68,10 +69,15 @@ def get_all_files_in_dir(directory, extensions=None):
 
     return sorted(file_list, key=natural_keys)
 
-
-def image_from_array(array):
+def pixmap_from_array(array):
     # Convert to image
     image = Image.fromarray(array)
-    image = QImage(ImageQt.ImageQt(image))
+    pixmap = ImageQt.toqpixmap(image)
 
-    return image
+    return pixmap
+
+def image_to_pixmap(image):
+    flags = Qt.ImageConversionFlags(Qt.ColorOnly & Qt.DiffuseDither)
+    pixmap = QPixmap.fromImage(image, flags)
+
+    return pixmap

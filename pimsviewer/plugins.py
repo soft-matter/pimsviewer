@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplicatio
 
 import pandas as pd
 
-from pimsviewer.utils import image_from_array
+from pimsviewer.utils import pixmap_from_array
 
 class Plugin(QDialog):
     name = 'Plugin'
@@ -147,7 +147,7 @@ class ProcessingPlugin(Plugin):
 
         arr = (arr * 255.0).astype(np.uint8)
         
-        image = image_from_array(arr)
+        image = pixmap_from_array(arr)
 
         image_widget.setPixmap(image)
 

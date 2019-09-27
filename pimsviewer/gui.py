@@ -257,7 +257,7 @@ class GUI(QMainWindow):
         self.reader.bundle_axes = bundle_axes
 
     def get_current_frame(self):
-        self.reader.bundle_axes = 'yx'
+        self.reader.bundle_axes = 'xy'
         default_coords = {}
 
         for dim in self.dimensions:
@@ -294,7 +294,8 @@ class GUI(QMainWindow):
         if 'c' in self.reader.bundle_axes:
             cix = self.reader.bundle_axes.index('c')
             if cix != 0:
-                frame = np.swapaxes(frame, 0, cix).copy()
+                frame = np.swapaxes(frame, 0, cix)
+                frame = np.swapaxes(frame, 1, 2).copy()
 
         return frame
 

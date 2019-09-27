@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QLabel,
                              QMainWindow, QMenu, QMessageBox, QScrollArea,
                              QSizePolicy, QGraphicsPixmapItem)
 
-from pimsviewer.utils import image_from_array
+from pimsviewer.utils import pixmap_from_array, image_to_pixmap
 
 
 class PimsImage(QGraphicsPixmapItem):
@@ -24,6 +24,7 @@ class PimsImage(QGraphicsPixmapItem):
     def array_to_pixmap(self, array):
         array = np.swapaxes(pims.to_rgb(array), 0, 1)
 
-        image = image_from_array(array)
+        image = pixmap_from_array(array)
 
-        return QPixmap(image)
+        return image
+

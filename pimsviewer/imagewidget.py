@@ -5,6 +5,7 @@ from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
 from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QGraphicsView, QGraphicsScene)
 
 from pimsviewer.pims_image import PimsImage
+from pimsviewer.utils import image_to_pixmap
 
 class ImageWidget(QGraphicsView):
 
@@ -38,7 +39,7 @@ class ImageWidget(QGraphicsView):
             return
 
         if isinstance(pixmap, QImage):
-            pixmap = QPixmap(pixmap)
+            pixmap = image_to_pixmap(image)
 
         if not self.image.isVisible():
             self.image.setVisible(True)

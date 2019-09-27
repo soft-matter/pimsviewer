@@ -37,7 +37,6 @@ class WrappedReader(object):
 
     def __getitem__(self, key):
         if isinstance(self.reader, FramesSequenceND):
-            print(key)
             return self.reader[key]
         else:
             # provide a fallback for the FramesSequenceND behaviour
