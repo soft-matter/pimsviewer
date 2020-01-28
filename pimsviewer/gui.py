@@ -323,7 +323,7 @@ class GUI(QMainWindow):
 
 @click.command()
 @click.argument('filepath', required=False, type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True))
-@click.option('--example-plugins/--no-example-plugins', default=False, help='Load additional example plugins')
+@click.option('--example-plugins/--no-example-plugins', default=True, help='Load additional example plugins')
 def run(filepath, example_plugins):
     app = QApplication(sys.argv)
 

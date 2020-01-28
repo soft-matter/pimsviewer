@@ -6,7 +6,7 @@ from os import path
 from PIL import Image, ImageQt
 from PyQt5.QtCore import QDir, Qt, QRectF
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
-from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit, QDialog, QGraphicsEllipseItem)
+from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit, QDialog, QGraphicsEllipseItem, QCheckBox)
 
 import pandas as pd
 
@@ -19,16 +19,32 @@ class AnnotatePlugin(Plugin):
     def __init__(self, parent=None, positions_df=None):
         super(AnnotatePlugin, self).__init__(parent)
 
+        self.x_name = 'x'
+        self.y_name = 'y'
+        self.r_name = 'r'
+
+        self.unit_scaling = 1.0
         self.positions_df = positions_df
 
         self.vbox = QVBoxLayout()
         self.setLayout(self.vbox)
 
-        self.vbox.addWidget(QLabel('Annotate Plugin'))
+        self.label = QLabel('Annotate Plugin')
+        self.vbox.addWidget(self.label)
 
-        browseBtn = QPushButton('Open trajectories...')
-        browseBtn.clicked.connect(self.open)
-        self.vbox.addWidget(browseBtn)
+        self.browseBtn = QPushButton('Open trajectories...')
+        self.browseBtn.clicked.connect(self.open)
+        self.vbox.addWidget(self.browseBtn)
+
+        self.unitSwitch = QCheckBox('Convert to pixels using scaling')
+        self.unitSwitch.stateChanged.connect(self.set_unit_scaling)
+        self.unitSwitch.setChecked(True)
+        self.vbox.addWidget(self.unitSwitch)
+
+        self.swapXYSwitch = QCheckBox('Swap X and Y columns')
+        self.swapXYSwitch.stateChanged.connect(self.swap_xy)
+        self.swapXYSwitch.setChecked(False)
+        self.vbox.addWidget(self.swapXYSwitch)
 
         self.items = []
 
@@ -47,6 +63,7 @@ class AnnotatePlugin(Plugin):
     def showFrame(self, image_widget, dimensions):
         if self.positions_df is None:
             return
+        self.set_unit_scaling()
 
         scaleFactor = image_widget.scaleFactor
         self.clearAll(image_widget)
@@ -55,9 +72,13 @@ class AnnotatePlugin(Plugin):
         selection = self.positions_df[self.positions_df['frame'] == frame_no]
 
         for i, row in selection.iterrows():
-            x = float(row['x'])
-            y = float(row['y'])
-            r = float(row['r'])
+            x = float(row[self.x_name]) * self.unit_scaling
+            y = float(row[self.y_name]) * self.unit_scaling
+
+            r = float(row[self.r_name]) * self.unit_scaling
+            if np.isnan(r):
+                r = 10.0
+
             ellipse = QGraphicsEllipseItem(self.rect_from_xyr(x, y, r, scaleFactor))
             pen = ellipse.pen()
             pen.setWidth(2)
@@ -65,6 +86,25 @@ class AnnotatePlugin(Plugin):
             ellipse.setPen(pen)
             image_widget.addItemToScene(ellipse)
             self.items.append(ellipse)
+
+    def swap_xy(self):
+        if not self.swapXYSwitch.isChecked():
+            self.x_name = 'x'
+            self.y_name = 'y'
+        else:
+            self.x_name = 'y'
+            self.y_name = 'x'
+
+    def set_unit_scaling(self):
+        if not self.unitSwitch.isChecked():
+            self.unit_scaling = 1.0
+        else:
+            if self.app.reader:
+                try:
+                    self.unit_scaling = 1.0 / self.app.reader.metadata['pixel_microns']
+                except:
+                    self.unit_scaling = 1.0
+                    print('Warning: AnnotatePlugin: file type not implemented for automatic coordinate scaling')
 
     def open(self):
         currentDir = QDir.currentPath()
