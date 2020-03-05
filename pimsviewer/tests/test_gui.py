@@ -7,11 +7,16 @@ from PyQt5.QtWidgets import QApplication
 from pimsviewer.gui import GUI
 
 class GuiTest(unittest.TestCase):
-    def setUp(self):
-        app = QApplication(sys.argv)
-        gui = GUI()
+    app = None
+    qapp = None
 
-        self.app = gui
+    def setUp(self):
+        self.qapp = QApplication(sys.argv)
+        self.app = GUI()
+
+    def tearDown(self):
+        self.app.close()
+        self.qapp.exit()
 
     def test_init(self):
         self.assertEqual(self.app.windowTitle(), self.app.name)
