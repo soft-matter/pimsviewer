@@ -1,16 +1,9 @@
 import sys
-from pimsviewer import GUI
 from PyQt5.QtWidgets import QApplication
-import numpy as np
 
-import sys
 import unittest
-from PyQt5.QtTest import QTest
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit)
 
 from pimsviewer.gui import GUI
-from pimsviewer.plugins import Plugin
 from pimsviewer.example_plugins import ProcessingPlugin, AnnotatePlugin
 
 class PluginsTest(unittest.TestCase):
@@ -30,7 +23,8 @@ class PluginsTest(unittest.TestCase):
 
         self.assertTrue(has_processing_plugin)
         self.assertTrue(has_annotate_plugin)
+        gui.close()
+        app.exit()
 
 if __name__ == "__main__":
     unittest.main()
-
