@@ -274,15 +274,16 @@ class GUI(QMainWindow):
         self.reader.default_coords = default_coords
 
         # always one playing axis at a time
-        if len(self.reader.iter_axes) == 0:
-            self.reader.iter_axes = 't'
-        elif len(self.reader.iter_axes) != 1:
+        if len(self.reader.iter_axes) > 1:
             self.reader.iter_axes = self.reader.iter_axes[0]
 
-        try:
-            dim_obj = self.dimensions[self.reader.iter_axes[0]]
-            i = dim_obj.position
-        except KeyError:
+        if len(self.reader.iter_axes) > 0:
+            try:
+                dim_obj = self.dimensions[self.reader.iter_axes[0]]
+                i = dim_obj.position
+            except KeyError:
+                i = 0
+        else:
             i = 0
 
         try:
