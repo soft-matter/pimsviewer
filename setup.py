@@ -20,19 +20,15 @@ setup_parameters = dict(
     author="Ruben Verweij",
     author_email="ruben@lighthacking.nl",
     url="https://github.com/soft-matter/pimsviewer",
-    install_requires=['scikit-image>=0.11', 'matplotlib>=2.2.2', 'pims>=0.4',
-                      'pillow', 'click', 'slicerator', 'pygubu'],
+    install_requires=['click', 'pims', 'PyQt5>=5.13.1', 'pandas', 'numpy', 'Pillow'],
     python_requires='>=3.0',
     packages=['pimsviewer'],
-    package_data={
-        'pimsviewer': [
-            'interface.ui',
-            ]
-    },
+    package_dir={'pimsviewer': 'pimsviewer'},
+    package_data={'': ['*.ui']},
     long_description=descr,
     entry_points={
         'gui_scripts': [
-            'pimsviewer=pimsviewer.run_gui:run',
+            'pimsviewer=pimsviewer.gui:run',
         ],
     },
 )

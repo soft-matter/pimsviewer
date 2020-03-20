@@ -1,0 +1,27 @@
+language: python
+sudo: false
+
+python:
+  - "3.6"
+  - "3.7"
+
+install:
+  # needed to get xvfb running?
+  - sudo apt-get install -y libegl1-mesa libdbus-1-3 libxkbcommon-x11-0
+  - conda update --yes conda
+  # Append the conda-forge channel, instead of adding it. See:
+  # https://github.com/conda-forge/conda-forge.github.io/issues/232)
+  - conda config --append channels conda-forge
+  - conda create -n testenv --yes $DEPS nose pip python=$TRAVIS_PYTHON_VERSION
+  - source activate testenv
+  - python -m pip install .
+
+before_install:
+  - wget http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+  - chmod +x miniconda.sh
+  - ./miniconda.sh -b -p /home/travis/mc
+  - export PATH=/home/travis/mc/bin:$PATH
+
+script:
+    # for running the GUI
+    - xvfb-run --server-args="-screen 0 1024x768x24" nosetests --nologcapture

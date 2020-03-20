@@ -1,3 +1,3 @@
-from .viewer import Viewer
-from .run_gui import run
-from .plugins import (Plugin, PlottingPlugin, AnnotatePlugin, SelectionPlugin)
+name = 'pimsviewer'
+
+from .gui import GUI, run
