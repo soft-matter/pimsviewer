@@ -149,11 +149,11 @@ class GUI(QMainWindow):
             fileName, _ = QFileDialog.getOpenFileName(self, "Open File", QDir.currentPath())
 
         if fileName:
-            #try:
-            self.reader = WrappedReader(pims.open(fileName))
-            #except:
-                #QMessageBox.critical(self, "Error", "Cannot load %s." % fileName)
-                #return
+            try:
+                self.reader = WrappedReader(pims.open(fileName))
+            except:
+                QMessageBox.critical(self, "Error", "Cannot load %s." % fileName)
+                return
 
             self.filename = fileName
             self.update_dimensions()
