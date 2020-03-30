@@ -219,9 +219,10 @@ class GUI(QMainWindow):
         if not self.reader:
             return
 
-        current_player = self.reader.iter_axes[0]
-        if dimension.name != current_player:
-            self.dimensions[current_player].playing = False
+        if len(self.reader.iter_axes) > 0:
+            current_player = self.reader.iter_axes[0]
+            if dimension.name != current_player:
+                self.dimensions[current_player].playing = False
 
         self.reader.iter_axes = dimension.name
         self.showFrame()
