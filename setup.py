@@ -26,6 +26,7 @@ setup_parameters = dict(
     package_dir={'pimsviewer': 'pimsviewer'},
     package_data={'': ['*.ui']},
     long_description=descr,
+    long_description_content_type="text/markdown",
     entry_points={
         'gui_scripts': [
             'pimsviewer=pimsviewer.gui:run',
