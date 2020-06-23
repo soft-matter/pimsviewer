@@ -14,6 +14,7 @@ class Dimension(QWidget):
     _merge = False
     _playable = False
     _fps = 5.0
+    _max_playback_fps = 5.0
 
     play_event = pyqtSignal(QWidget)
 
@@ -106,7 +107,10 @@ class Dimension(QWidget):
         if not self.playing:
             return
 
-        self.position += 1
+        if self._fps > self._max_playback_fps:
+            self.position += int(round(self._fps / self._max_playback_fps))
+        else:
+            self.position += 1
 
     @property
     def size(self):
@@ -129,7 +133,8 @@ class Dimension(QWidget):
         fps = float(fps)
 
         self._fps = fps
-        self.playTimer.setInterval(int(round(1000.0 / self._fps)))
+        play_fps = fps if fps < self._max_playback_fps else self._max_playback_fps
+        self.playTimer.setInterval(int(round(1000.0 / play_fps)))
         self.fpsButton.setText('%d fps' % self.fps)
 
     @property

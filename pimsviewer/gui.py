@@ -270,6 +270,12 @@ class GUI(QMainWindow):
 
         self.reader.bundle_axes = bundle_axes
 
+        if 't' in self.dimensions:
+            try:
+                self.dimensions['t'].fps = self.reader.frame_rate
+            except AttributeError:
+                self.statusbar.showMessage('Unable to read frame rate from file')
+
     def get_current_frame(self):
         self.reader.bundle_axes = 'xy'
         default_coords = {}
