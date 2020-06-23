@@ -127,6 +127,19 @@ class GUI(QMainWindow):
             html = '<p><strong>%s:</strong></p><p><pre>%s</pre></p>' % (prop, self.reader.metadata[prop])
             items.append(html)
 
+        try:
+            html = '<p><strong>Framerate:</strong></p><p><pre>%.3f</pre></p>' % (self.reader.frame_rate)
+            items.append(html)
+            num_frames = self.reader.sizes['t']
+            html = '<p><strong>Duration:</strong></p><p><pre>%.3f s</pre></p>' % (num_frames / self.reader.frame_rate)
+            items.append(html)
+        except (AttributeError):
+            html = '<p><strong>Framerate:</strong></p><p><pre>Unknown</pre></p>'
+            items.append(html)
+            num_frames = self.reader.sizes['t']
+            html = '<p><strong>Duration:</strong></p><p><pre>%d frames</pre></p>' % (num_frames)
+            items.append(html)
+
         # File path
         html = '<p><strong>Filename:</strong></p><p>%s</p>' % (self.filename)
         items.append(html)
@@ -256,6 +269,12 @@ class GUI(QMainWindow):
             bundle_axes += 'x'
 
         self.reader.bundle_axes = bundle_axes
+
+        if 't' in self.dimensions:
+            try:
+                self.dimensions['t'].fps = self.reader.frame_rate
+            except AttributeError:
+                self.statusbar.showMessage('Unable to read frame rate from file')
 
     def get_current_frame(self):
         self.reader.bundle_axes = 'xy'
