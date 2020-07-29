@@ -6,7 +6,7 @@ from os import path
 from PIL import Image, ImageQt
 from PyQt5.QtCore import QDir, Qt, QRectF
 from PyQt5.QtGui import QImage, QPainter, QPalette, QPixmap
-from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit, QDialog, QGraphicsEllipseItem, QCheckBox)
+from PyQt5.QtWidgets import (QHBoxLayout, QSlider, QWidget, QAction, QApplication, QFileDialog, QLabel, QMainWindow, QMenu, QMessageBox, QScrollArea, QSizePolicy, QStatusBar, QVBoxLayout, QDockWidget, QPushButton, QStyle, QLineEdit, QDialog, QGraphicsEllipseItem, QCheckBox, QDoubleSpinBox)
 
 import pandas as pd
 
@@ -23,23 +23,31 @@ class AnnotatePlugin(Plugin):
         self.y_name = 'y'
         self.r_name = 'r'
 
-        self.unit_scaling = 1.0
+        self.unit_scaling = None
         self.positions_df = positions_df
 
         self.vbox = QVBoxLayout()
         self.setLayout(self.vbox)
 
         self.label = QLabel('Annotate Plugin')
+        self.description = QLabel('Loads trajectories from CSV files containing the columns frame,x,y(,r) and draws circles at the specified locations.')
+        self.description.setWordWrap(True)
         self.vbox.addWidget(self.label)
+        self.vbox.addWidget(self.description)
 
         self.browseBtn = QPushButton('Open trajectories...')
         self.browseBtn.clicked.connect(self.open)
         self.vbox.addWidget(self.browseBtn)
 
-        self.unitSwitch = QCheckBox('Convert to pixels using scaling')
-        self.unitSwitch.stateChanged.connect(self.set_unit_scaling)
-        self.unitSwitch.setChecked(True)
-        self.vbox.addWidget(self.unitSwitch)
+        self.scaleLabel = QLabel('Scale factor (units/px)')
+        self.scaleInput = QDoubleSpinBox()
+        self.scaleInput.setMinimum(0)
+        self.scaleInput.setValue(1.0)
+        self.scaleInput.setDecimals(5)
+        self.scaleInput.setSingleStep(0.1)
+        self.scaleInput.valueChanged.connect(self.set_unit_scaling)
+        self.vbox.addWidget(self.scaleLabel)
+        self.vbox.addWidget(self.scaleInput)
 
         self.swapXYSwitch = QCheckBox('Swap X and Y columns')
         self.swapXYSwitch.stateChanged.connect(self.swap_xy)
@@ -96,15 +104,14 @@ class AnnotatePlugin(Plugin):
             self.y_name = 'x'
 
     def set_unit_scaling(self):
-        if not self.unitSwitch.isChecked():
-            self.unit_scaling = 1.0
-        else:
-            if self.app.reader:
-                try:
-                    self.unit_scaling = 1.0 / self.app.reader.metadata['pixel_microns']
-                except:
-                    self.unit_scaling = 1.0
-                    print('Warning: AnnotatePlugin: file type not implemented for automatic coordinate scaling')
+        if self.app.reader and self.unit_scaling is None:
+            try:
+                self.unit_scaling = 1.0 / self.app.reader.metadata['pixel_microns']
+            except:
+                self.unit_scaling = 1.0
+                print('Warning: AnnotatePlugin: file type not implemented for automatic coordinate scaling')
+
+        self.unit_scaling = self.scaleInput.value()
 
     def open(self):
         currentDir = QDir.currentPath()
