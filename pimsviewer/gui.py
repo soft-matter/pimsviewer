@@ -60,6 +60,12 @@ class GUI(QMainWindow):
     def add_to_dock(self, widget):
         self.dockLayout.addWidget(widget)
 
+    def updateWindowTitle(self):
+        title = self.name
+        if self.filename is not None:
+            title += ' - %s' % path.basename(self.filename)
+        self.setWindowTitle(title)
+
     def updateActions(self):
         hasfile = self.reader is not None
         self.actionClose.setEnabled(hasfile)
@@ -174,6 +180,7 @@ class GUI(QMainWindow):
 
             self.actionFit_width.setEnabled(True)
             self.updateActions()
+            self.updateWindowTitle()
 
     def open_next_prev(self):
         direction_next = True
@@ -214,6 +221,7 @@ class GUI(QMainWindow):
         self.reader = None
         self.filename = None
         self.showFrame()
+        self.updateWindowTitle()
 
     def init_dimensions(self):
         for dim in 'tvzcxy':
